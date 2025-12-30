@@ -6,5 +6,5 @@ router = APIRouter(prefix="/items", tags=["Items"])
 service = ItemService()
 
 @router.post("/", response_model=str)
-async def create_item(item: dict):
+async def create_item(item: list[dict]):
     return await service.create_item(item)
