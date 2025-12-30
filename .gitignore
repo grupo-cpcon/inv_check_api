@@ -1,2 +1,77 @@
-*.env
-/venv
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.eggs/
+
+# =========================
+# Virtual Environments
+# =========================
+venv/
+.env/
+.env.*
+.venv/
+
+# =========================
+# FastAPI / Uvicorn
+# =========================
+*.log
+uvicorn.log
+
+# =========================
+# Pytest / Coverage
+# =========================
+.pytest_cache/
+.coverage
+htmlcov/
+
+# =========================
+# Mypy / Type checking
+# =========================
+.mypy_cache/
+.dmypy.json
+
+# =========================
+# IDEs
+# =========================
+.vscode/
+.idea/
+*.swp
+
+# =========================
+# OS
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Build / Distribution
+# =========================
+build/
+dist/
+pip-wheel-metadata/
+
+# =========================
+# Databases / Local data
+# =========================
+*.sqlite3
+*.db
+data/
+mongo-data/
+
+# =========================
+# Docker
+# =========================
+*.env.docker
+docker-compose.override.yml
+
+# =========================
+# Secrets
+# =========================
+*.pem
+*.key
