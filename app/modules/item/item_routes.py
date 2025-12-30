@@ -8,4 +8,4 @@ service = ItemService()
 
 @router.post("/", response_model=str)
 async def create_item(user: ItemCreate):
-    return await service.create_user(user.dict())
+    return await service.create_item(user.dict())
