@@ -1,18 +1,23 @@
-from app.core.database import database
-from bson import ObjectId
-
+from fastapi import Request
 
 class ItemRepository:
-    async def create(self, data: list[dict], parent_id: ObjectId | None = None):
-        """ doc = {
-            "name": data.get('name'),
-            "parent_id": parent_id
-        } """    
-        result = await collection.insert_many(data)
-        """ node_id = result.inserted_id
- """
-        """ if data.get('children'):
-            for child in data.get('children'):
-                await self.create(child, node_id)
-         """
-        return str("")
+    async def create(self, payload: dict, request: Request):
+        db = request.state.db
+        result = await db.items.insert_one(payload)
+        payload["_id"] = str(result.inserted_id)
+        return payload
+
+    async def create_many(self, data: list[dict], request: Request):
+        db = request.state.db
+        results = await db.items.insert_many(data)
+        return {"ids": [str(_id) for _id in results.inserted_ids], "count": len(results.inserted_ids)}
+    
+    async def find_by(self, request: Request):
+        db = request.state.db
+        args: dict = request.query_params
+        cursor = db.items.find(args)
+        results = await cursor.to_list()
+        
+        for item in results:
+            item["_id"] = str(item["_id"])
+        return results

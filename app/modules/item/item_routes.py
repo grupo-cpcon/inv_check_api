@@ -1,10 +1,22 @@
-from fastapi import APIRouter, HTTPException
-from .item_service import ItemService
-from typing import List
+from typing import Optional
+from fastapi import APIRouter, Body, Query, Request
+from app.core.decorators.auth_decorator import no_auth
+from app.modules.item.item_repository import ItemRepository
 
-router = APIRouter(prefix="/items", tags=["Items"])
-service = ItemService()
+router = APIRouter(prefix="/item", tags=["Item"])
+repository = ItemRepository()
 
-@router.post("/", response_model=str)
-async def create_item(item: list[dict]):
-    return await service.create_item(item)
+# TODO: add service to check if has images. if yes send it to a bucket
+
+@no_auth
+@router.post("/")
+async def create(payload: dict, request: Request):
+    return await repository.create(payload, request)
+
+@router.post("/batch")
+async def create_items_batch(data: list[dict], request: Request):
+    return await repository.create_many(data, request)
+
+@router.get("/")
+async def get_items(request: Request):
+    return await repository.find_by(request)
