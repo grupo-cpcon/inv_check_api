@@ -1,9 +1,17 @@
-from app.core.database import database
+from app.core.database import get_database
 
-collection = database["items"]
 
 class ItemRepository:
+    def __init__(self):
+        self.collection = get_database()["items"]
+
     async def create(self, data: dict):
-        result = await collection.insert_one(data)
+        result = await self.collection.insert_one(data)
         return str(result.inserted_id)
-    
+
+    async def list(self):
+        users = []
+        async for doc in self.collection.find():
+            doc["_id"] = str(doc["_id"])
+            users.append(doc)
+        return users
