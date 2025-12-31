@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 
-from app.modules.base_data.data_load_routes import data_load
+from app.modules.data_load.data_load_routes import router as data_load_router
+from app.modules.item.item_routes import router as item_router
 
 app = FastAPI(title="FastAPI + MongoDB")
 
-app.include_router(data_load)
+app.include_router(data_load_router)
+app.include_router(item_router)
