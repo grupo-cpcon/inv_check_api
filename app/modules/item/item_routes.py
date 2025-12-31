@@ -1,5 +1,6 @@
 from typing import Optional
 from fastapi import APIRouter, Body, Query, Request
+from app.core.decorators.auth_decorator import no_auth
 from app.modules.item.item_repository import ItemRepository
 
 router = APIRouter(prefix="/item", tags=["Item"])
@@ -7,15 +8,15 @@ repository = ItemRepository()
 
 # TODO: add service to check if has images. if yes send it to a bucket
 
+@no_auth
 @router.post("/")
-async def create(request: Request):
-    return await repository.create(request)
+async def create(payload: dict, request: Request):
+    return await repository.create(payload, request)
 
 @router.post("/batch")
-async def create_items_batch(data: list[dict] = Body(...)):
-    return await repository.create_many(data)
+async def create_items_batch(data: list[dict], request: Request):
+    return await repository.create_many(data, request)
 
 @router.get("/")
 async def get_items(request: Request):
-    args = dict(request.query_params)
-    return await repository.find_by(args)
+    return await repository.find_by(request)
