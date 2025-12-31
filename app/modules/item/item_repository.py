@@ -1,7 +1,6 @@
 from app.core.database import database
 from bson import ObjectId
 
-collection = database["items"]
 
 class ItemRepository:
     async def create(self, data: list[dict], parent_id: ObjectId | None = None):
