@@ -8,8 +8,8 @@ repository = ItemRepository()
 # TODO: add service to check if has images. if yes send it to a bucket
 
 @router.post("/")
-async def create(payload: dict = Body(...)):
-    return await repository.create(payload)
+async def create(request: Request):
+    return await repository.create(request)
 
 @router.post("/batch")
 async def create_items_batch(data: list[dict] = Body(...)):

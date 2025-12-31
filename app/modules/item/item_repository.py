@@ -1,13 +1,11 @@
-import json
-from app.core.database import database
-
-collection = database['items']
+from fastapi import Request
 
 class ItemRepository:
-    async def create(self, data: dict):
-        result = await collection.insert_one(data)
-        data["_id"] = str(result.inserted_id)
-        return data
+    async def create(self, request: Request):
+        payload = request.body
+        result = await request.state.db_client.insert_one(payload)
+        payload["_id"] = str(result.inserted_id)
+        return payload
 
     async def create_many(self, data: list[dict]):
         results = await collection.insert_many(data)
