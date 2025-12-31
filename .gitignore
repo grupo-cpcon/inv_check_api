@@ -76,4 +76,4 @@ docker-compose.override.yml
 *.pem
 *.key
 
-/venv/
+/venv/.env
