@@ -1,5 +1,4 @@
-from typing import Optional
-from fastapi import APIRouter, Body, Query, Request
+from fastapi import APIRouter, Request
 from app.core.decorators.auth_decorator import no_auth
 from app.modules.item.item_repository import ItemRepository
 
@@ -8,7 +7,6 @@ repository = ItemRepository()
 
 # TODO: add service to check if has images. if yes send it to a bucket
 
-@no_auth
 @router.post("/")
 async def create(payload: dict, request: Request):
     return await repository.create(payload, request)
