@@ -7,7 +7,7 @@ load_dotenv()
 MONGO_URI = os.getenv("MONGO_URI")
 
 if not MONGO_URI:
-    raise ValueError("MONGO_URI or MONGO_DB_GLOBAL not set in environment variables")
+    raise ValueError("MONGO_URI not set in environment variables")
 
 class MongoConnection:
     _client: AsyncIOMotorClient | None = None
