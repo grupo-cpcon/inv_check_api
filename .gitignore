@@ -16,6 +16,9 @@ venv/
 .env/
 .env.*
 .venv/
+*.env
+/venv
+./venv
 
 # =========================
 # FastAPI / Uvicorn
@@ -75,3 +78,5 @@ docker-compose.override.yml
 # =========================
 *.pem
 *.key
+
+/venv/.env
