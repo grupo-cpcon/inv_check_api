@@ -1,5 +1,3 @@
-É nois nessa porra
-
 Instalação dos pacotes
 pip install -r requirements.txt
 
