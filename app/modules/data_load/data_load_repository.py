@@ -18,7 +18,7 @@ class DataLoadRepository:
             clean(r)
 
         try:
-            result = await request.state.db.items.insert_many(tree)
+            await request.state.db.inventory_base.insert_many(tree)
             return {"message": "Dados inseridos com sucesso!", "count": len(tree)}
         except:
             return {"message": "Não foi possível fazer a carga de itens"}

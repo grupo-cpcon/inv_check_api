@@ -3,7 +3,6 @@ from bson import ObjectId
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict
 from app.core.database import MongoConnection
-from app.core.decorators.auth_decorator import no_auth
 from app.core.decorators.tenant_decorator import no_tenant_required
 
 class TenantSchema(BaseModel):
@@ -18,8 +17,6 @@ class TenantSchema(BaseModel):
 router = APIRouter(prefix="/tenant", tags=["Tenant"])
 client = MongoConnection.get_client()
 
-@no_auth
-@no_tenant_required
 @router.post("/")
 async def create(tenant: TenantSchema):
     existing_dbs = await client.list_database_names()
@@ -39,7 +36,6 @@ async def create(tenant: TenantSchema):
 
     return dict(tenant)
 
-@no_auth
 @no_tenant_required
 @router.get("/")
 async def read():

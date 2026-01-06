@@ -5,6 +5,12 @@ from app.shared.handle_decorator import handle_decorator
 
 class TenantMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
+        if request.url.path.startswith(("/docs", "/redoc", "/openapi.json")):
+            return await call_next(request)
+        
         if handle_decorator("no_tenant_required", request):
             return await call_next(request)
 
