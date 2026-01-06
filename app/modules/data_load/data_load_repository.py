@@ -22,5 +22,14 @@ class DataLoadRepository:
             return {"message": "Dados inseridos com sucesso!", "count": len(tree)}
         except:
             return {"message": "Não foi possível fazer a carga de itens"}
+        
+    async def read(self, request: Request):
+        db = request.state.db
+        cursor = db.inventory_base.find()
+        results = await cursor.to_list()
+
+        for item in results:
+            item["_id"] = str(item["_id"])
+        return results
 
         

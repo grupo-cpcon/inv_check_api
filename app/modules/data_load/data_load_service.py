@@ -7,3 +7,6 @@ class DataLoadService:
 
     async def data_load(self, request: Request):
         return await self.repository.create_many(request)
+    
+    async def read(self, request: Request):
+        return await self.repository.read(request)
