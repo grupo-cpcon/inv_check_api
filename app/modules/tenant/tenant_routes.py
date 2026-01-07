@@ -3,14 +3,12 @@ from bson import ObjectId
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict
 from app.core.database import MongoConnection
-from app.core.decorators.auth_decorator import no_auth
 from app.core.decorators.tenant_decorator import no_tenant_required
 
 class TenantSchema(BaseModel):
     _id: ObjectId
     name: str
     database: str
-    admin_email: str
     is_active: bool
 
     model_config = ConfigDict(extra="allow")
@@ -18,7 +16,6 @@ class TenantSchema(BaseModel):
 router = APIRouter(prefix="/tenant", tags=["Tenant"])
 client = MongoConnection.get_client()
 
-@no_auth
 @no_tenant_required
 @router.post("/")
 async def create(tenant: TenantSchema):
@@ -39,7 +36,6 @@ async def create(tenant: TenantSchema):
 
     return dict(tenant)
 
-@no_auth
 @no_tenant_required
 @router.get("/")
 async def read():

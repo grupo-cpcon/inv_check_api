@@ -1,5 +1,4 @@
 from fastapi import FastAPI, HTTPException
-from app.core.middlewares.tenant_middleware import TenantMiddleware
 from fastapi.exceptions import RequestValidationError
 from app.core.exceptions import http_exception_handler  
 from app.core.events.server_events import startup_events
@@ -18,7 +17,22 @@ app.add_exception_handler(RequestValidationError, http_exception_handler)
 app.add_exception_handler(HTTPException, http_exception_handler)
 
 # middleware
+from fastapi.middleware.cors import CORSMiddleware
+from app.core.middlewares.tenant_middleware import TenantMiddleware
 from app.core.middlewares.auth_middleware import AuthMiddleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:8080",
+        "http://localhost",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.add_middleware(AuthMiddleware)
 app.add_middleware(TenantMiddleware)
 
