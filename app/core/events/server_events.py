@@ -1,10 +1,6 @@
 from fastapi import FastAPI
 
 def startup_events(app: FastAPI):
-    # @app.on_event("startup")
-    # async def startup_db_client():
-    #     await connect_to_mongo()
-
     @app.on_event("startup")
     async def collect_public_endpoints():
         app.state.public_endpoints = set()

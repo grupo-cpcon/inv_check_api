@@ -1,65 +1,71 @@
 import datetime
+from typing import List
+
 from bson import ObjectId
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, ConfigDict
+from fastapi import APIRouter, HTTPException, status
+from motor.motor_asyncio import AsyncIOMotorDatabase, AsyncIOMotorCollection
+from pydantic import BaseModel
+from pymongo import ReturnDocument
+from pymongo.results import InsertOneResult
+from starlette.responses import Response
+
 from app.core.database import MongoConnection
 from app.core.decorators.tenant_decorator import no_tenant_required
+from fastapi import Request
+
+from app.modules.tenant.tenant_service import get_tenant_database_names, get_obj_id_by_tenant_id
+
 
 class TenantSchema(BaseModel):
-    _id: ObjectId
-    name: str
-    database: str
-    is_active: bool
-
-    model_config = ConfigDict(extra="allow")
+    _id:        ObjectId
+    database:   str
+    name:       str
+    is_active:  bool = True
+    created_at: datetime.datetime
 
 router = APIRouter(prefix="/tenant", tags=["Tenant"])
 client = MongoConnection.get_client()
 
+
 @no_tenant_required
-@router.post("/")
+@router.post(path="/", status_code=status.HTTP_201_CREATED)
 async def create(tenant: TenantSchema):
-    existing_dbs = await client.list_database_names()
+    existing_dbs: List[str] = await client.list_database_names()
     
     if tenant.database in existing_dbs:
-        raise HTTPException(
-            status_code=400,
+        HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Tenant '{tenant.name}' já existe (database {tenant.database} encontrado)"
         )
-    
-    tenant_db = client[tenant.database]
-    tenant.created_at = f"{datetime.datetime.utcnow()}"
-    result = await tenant_db.dummy.insert_one(dict(tenant))
-    
-    tenant_dict = dict(tenant)
+
+    tenant.created_at = datetime.datetime.now(datetime.UTC)
+
+    # Reference to the database
+    tenant_db: AsyncIOMotorDatabase = client[tenant.database]
+
+    # Create dummy collection inside the database so mongo actually creates it
+    result: InsertOneResult = await tenant_db.dummy.insert_one(dict(tenant))
+
+    tenant_dict: dict = tenant.model_dump()
     tenant_dict['_id'] = str(result.inserted_id)
 
-    return dict(tenant)
+    return tenant_dict
+
 
 @no_tenant_required
-@router.get("/")
+@router.get(path="/", status_code=status.HTTP_200_OK)
 async def read():
-    all_dbs = await client.list_database_names()
-    
-    tenant_dbs = [db for db in all_dbs if db.startswith("cp_")]
-    
-    tenants_info = []
+    tenant_dbs: List[str] = await get_tenant_database_names()
+    tenants_info: List[dict] = []
     
     for db_name in tenant_dbs:
-        tenant_name = db_name.replace("cp_", "", 1)
-        tenant_db = client[db_name]
+        tenant_name: str = db_name.replace("cp_", "", 1)
+        tenant_db: AsyncIOMotorDatabase = client[db_name]
         
-        info_doc = await tenant_db.dummy.find_one({})
+        info_doc: dict = await tenant_db.dummy.find_one()
         
         if info_doc:
-            tenant_data = {
-                "_id": str(info_doc.get("_id")) ,
-                "name": info_doc.get("name"),
-                "database": info_doc.get("database"),
-                "admin_email": info_doc.get("admin_email"),
-                "active": info_doc.get("active", True),
-                "created_at": info_doc.get("created_at"),
-            }
+            tenant_data = info_doc
         else:
             tenant_data = {
                 "name": tenant_name,
@@ -71,40 +77,48 @@ async def read():
     
     tenants_info.sort(key=lambda x: x.get("company_name", "").lower())
     
-    return {
-        "total": len(tenants_info),
-        "tenants": tenants_info
-    }
+    return Response(
+        content={
+            "total": len(tenants_info),
+            "tenants": tenants_info,
+        },
+        status_code=status.HTTP_200_OK
+    )
 
-@router.put("/{tenant_id}")
-async def update_tenant(tenant_id: str, new: TenantSchema):
-    try:
-        obj_id = ObjectId(tenant_id)
-    except Exception:
-        raise HTTPException(status_code=400, detail="ID inválido")
 
-    tenant = tenants_collection.find_one({"_id": obj_id})
-    if not tenant:
-        raise HTTPException(status_code=404, detail="Tenant não encontrado")
+@router.put(path="/{tenant_id}", status_code=status.HTTP_200_OK)
+async def update_tenant(tenant_id: str, new: TenantSchema, request: Request):
+    obj_id: ObjectId = get_obj_id_by_tenant_id(tenant_id)
+
+    db: AsyncIOMotorDatabase = request.state.db
+    dummy_collection: AsyncIOMotorCollection = db.dummy
     
-    tenants_collection.update_one({"_id": obj_id}, {"$set": {"name": new.name}})
+    updated: dict = await dummy_collection.find_one_and_update(
+        filter={"_id": obj_id},
+        update={"$set": new.model_dump(exclude_unset=True)},
+        return_document=ReturnDocument.AFTER,
+    )
     
-    return {
-        "status": "success",
-        "old": tenant["name"],
-        "new": new.name
-    }
+    return Response(
+        content=updated,
+        status_code=status.HTTP_200_OK
+    )
+
 
 @router.delete("/{tenant_id}")
-async def inactivate(tenant_id: str):
-    try:
-        obj_id = ObjectId(tenant_id)
-    except Exception:
-        raise HTTPException(status_code=400, detail="ID inválido")
+async def inactivate(tenant_id: str, request: Request):
+    obj_id: ObjectId = get_obj_id_by_tenant_id(tenant_id)
 
-    tenant = tenants_collection.find_one({"_id": obj_id})
-    if not tenant:
-        raise HTTPException(status_code=404, detail="Tenant não encontrado")
+    db: AsyncIOMotorDatabase = request.state.db
+    dummy_collection: AsyncIOMotorCollection = db.dummy
     
-    tenants_collection.update_one({"name": tenant["name"]}, {"$set": {"ativo": False}})
-    return {"status": "sucesso", "tenant": tenant["name"], "ativo": False}
+    updated: dict = await dummy_collection.find_one_and_update(
+        filter={"_id": obj_id},
+        update={"$set": {"active": False}},
+        return_document=ReturnDocument.AFTER,
+    )
+
+    return Response(
+        content=updated,
+        status_code=status.HTTP_200_OK
+    )
