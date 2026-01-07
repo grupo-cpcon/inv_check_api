@@ -9,7 +9,6 @@ class TenantSchema(BaseModel):
     _id: ObjectId
     name: str
     database: str
-    admin_email: str
     is_active: bool
 
     model_config = ConfigDict(extra="allow")
@@ -17,6 +16,7 @@ class TenantSchema(BaseModel):
 router = APIRouter(prefix="/tenant", tags=["Tenant"])
 client = MongoConnection.get_client()
 
+@no_tenant_required
 @router.post("/")
 async def create(tenant: TenantSchema):
     existing_dbs = await client.list_database_names()
