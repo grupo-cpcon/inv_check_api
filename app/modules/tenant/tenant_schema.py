@@ -1,6 +1,6 @@
 from typing import List, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from bson import ObjectId
 import datetime
 
@@ -14,8 +14,9 @@ class TenantSchema(BaseModel):
     is_active:  bool = True
     created_at: datetime.datetime
 
-    class Config:
+    model_config = ConfigDict(
         arbitrary_types_allowed = True
+    )
 
 
 class TenantPartialDTO(BaseModel):
@@ -31,9 +32,9 @@ class TenantResponseDTO(BaseModel):
     is_active:  bool = True
     created_at: datetime.datetime
 
-    model_config = {
-        "populate_by_name": True
-    }
+    model_config = ConfigDict(
+        populate_by_name=True
+    )
 
 
 class TenantListResponseDTO(BaseModel):
