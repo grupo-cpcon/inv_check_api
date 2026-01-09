@@ -22,9 +22,6 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 detail="Token not provided."
             )
 
-        if request.app.state.testing:
-            return await call_next(request)
-
         token = auth_header.split("Bearer ")[1].strip()
         if not await AuthService().validate_token(token):
             raise HTTPException(
