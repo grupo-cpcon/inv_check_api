@@ -1,8 +1,5 @@
 from fastapi import FastAPI
 
-from app.core.database import MongoConnection
-from app.shared.mongo_indexes import create_indexes
-
 def startup_events(app: FastAPI):
     @app.on_event("startup")
     async def collect_public_endpoints():
