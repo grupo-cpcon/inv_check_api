@@ -18,7 +18,3 @@ def startup_events(app: FastAPI):
                 endpoint_func = route.endpoint
                 if getattr(endpoint_func, "no_tenant_required", False):
                     app.state.no_tenant_required_endpoints.add(endpoint_func)
-""" def shutdown_events(app: FastAPI):
-    @app.on_event("shutdown")
-    async def shutdown_db_client():
-        await close_mongo_connection() """
