@@ -1,11 +1,13 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
-from app.core.exceptions import http_exception_handler  
 from app.core.events.server_events import startup_events
+from app.core.exceptions import http_exception_handler
+
 
 app = FastAPI(title="FastAPI + MongoDB")
 app.state.public_endpoints = set()
 app.state.no_tenant_required_endpoints = set()
+INITIALIZED_TENANTS = set()
 
 # events
 # shutdown_events(app)
@@ -48,3 +50,14 @@ app.include_router(data_load_router)
 app.include_router(inventory_session_router)
 app.include_router(item_router)
 app.include_router(auth_router)
+
+def create_test_app():
+    app = FastAPI()
+    app.add_middleware(TenantMiddleware)
+    app.add_middleware(AuthMiddleware)
+    app.include_router(tenant_router)
+    app.include_router(data_load_router)
+    app.include_router(inventory_session_router)
+    app.include_router(item_router)
+    app.include_router(auth_router)
+    return app

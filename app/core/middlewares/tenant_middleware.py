@@ -2,6 +2,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi import HTTPException, Request
 from app.core.database import MongoConnection
 from app.shared.handle_decorator import handle_decorator
+from app.shared.mongo_indexes import create_indexes
+from app.main import INITIALIZED_TENANTS
 
 class TenantMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -40,8 +42,12 @@ class TenantMiddleware(BaseHTTPMiddleware):
                 detail=f"Tenant '{tenant_name}' não encontrado"
             )
   
-        request.state.db = client.get_database(db_name)
+        db = client.get_database(db_name)
 
-        response = await call_next(request)
-        
-        return response
+        if tenant_name not in INITIALIZED_TENANTS:
+            await create_indexes(db)
+            INITIALIZED_TENANTS.add(tenant_name)
+
+        request.state.db = db
+
+        return await call_next(request)

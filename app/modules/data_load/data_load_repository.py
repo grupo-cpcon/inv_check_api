@@ -49,7 +49,7 @@ class DataLoadRepository:
     
         cursor = db.inventory_items.find(
             query, {}
-        ).sort("item_code", 1)
+        ).sort("reference", 1)
     
         items = []
         async for doc in cursor:

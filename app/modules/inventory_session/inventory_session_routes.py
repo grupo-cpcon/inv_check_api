@@ -31,7 +31,7 @@ async def export_inventory(session_id: str, request: Request):
 
     async for doc in cursor:
         ws.append([
-            doc["item_code"],
+            doc["reference"],
             " > ".join(doc["path"]),
             doc["level"],
             "SIM" if doc["checked"] else "NÃO",

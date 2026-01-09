@@ -19,18 +19,18 @@ class ItemRepository:
             "checked": bool(exists)
         }
 
-    async def check_item(self, request: Request, body: dict):
+    async def check_item(self, request: Request):
         db = request.state.db
         form = await request.form()
 
-        session_id = form.get("session_id")
-        item_id = form.get("item_id")
-        parent_id = form.get("parent_id")
+        session_id: str = form.get("session_id")
+        item_id: str = form.get("item_id")
+        parent_id: str = form.get("parent_id")
 
         if not session_id or not item_id:
             raise HTTPException(400, "session_id, item_id e parent_id são obrigatórios")
 
-        item = await db.inventory_nodes.find_one({"_id": item_id})
+        item = await db.inventory_items.find_one({"_id": ObjectId(item_id)})
         
         if not item:
             raise HTTPException(404, "Item não encontrado")
@@ -72,14 +72,13 @@ class ItemRepository:
 
         await db.inventory_checks.insert_one(doc)
 
-        return doc
-    
-    # async def find_by(self, request: Request):
-    #    db = request.state.db
-    #    args: dict = request.query_params
-    #    cursor = db.items.find(args)
-    #    results = await cursor.to_list()
-        
-    #    for item in results:
-    #        item["_id"] = str(item["_id"])
-    #    return results
+        return {
+            "item_id": item_id,
+            "parent_id": parent_id,
+            "checked": True,
+            "checked_at": datetime.datetime.utcnow(),
+            "photos": photos_data,
+            "reference": item["reference"],
+            "asset_data": item["asset_data"],
+            "path": item["path"]
+        }
