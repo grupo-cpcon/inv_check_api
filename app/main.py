@@ -2,6 +2,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from app.core.events.server_events import startup_events
 from app.core.exceptions import http_exception_handler
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 app = FastAPI(title="FastAPI + MongoDB")
