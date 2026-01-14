@@ -67,7 +67,7 @@ class ItemRepository:
             "checked_at": datetime.datetime.utcnow(),
             "photos": photos_data,
             "reference": item["reference"],
-            # "asset_data": item["asset_data"],
+            "asset_data": item["asset_data"],
             "path": item["path"]
         }
 
@@ -80,7 +80,7 @@ class ItemRepository:
             "checked_at": datetime.datetime.utcnow(),
             "photos": await storage_s3_retrieve_objects_url(photos_data),
             "reference": item["reference"],
-            # "asset_data": item["asset_data"],
+            "asset_data": item["asset_data"],
             "path": item["path"]
         }
 
