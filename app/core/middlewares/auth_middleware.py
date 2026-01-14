@@ -6,6 +6,9 @@ from app.shared.handle_decorator import handle_decorator
 
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
         if request.url.path.startswith(("/docs", "/redoc", "/openapi.json")):
             return await call_next(request)
         

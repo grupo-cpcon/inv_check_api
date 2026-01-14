@@ -1,14 +1,8 @@
+from bson import ObjectId
 import pandas as pd
 
 
-def clean(node):
-    if "children" in node:
-        if not node["children"]:
-            del node["children"]
-        else:
-            for c in node["children"]:
-                clean(c)
-def build_tree_from_df(
+def build_nodes_from_df(
     df: pd.DataFrame,
     delimiter_column: str,
     extra_fields: list[str] = None
@@ -17,52 +11,57 @@ def build_tree_from_df(
     level_columns = list(df.columns[:delimiter_index])
 
     nodes = {}
-    roots = []
+    documents = []
 
     for _, row in df.iterrows():
-        levels = [
-            str(row[col]).strip()
-            for col in level_columns
-            if pd.notna(row[col]) and str(row[col]).strip() != ""
-        ]
+        parent_id = None
+        path = []
 
-        if not levels:
-            continue
+        for level, col in enumerate(level_columns):
+            value = row[col]
 
-        parent = None
+            if pd.isna(value) or str(value).strip() == "":
+                break
 
-        for level_value in levels:
-            node_id = level_value
+            value = str(value).strip()
+            path.append(value)
 
-            if node_id not in nodes:
-                node = {
-                    "item_code": node_id,
-                    "children": []
+            node_key = (value, parent_id)
+
+            if node_key not in nodes:
+                _id = ObjectId()
+
+                is_location = col.lower().startswith("loc")
+
+                doc = {
+                    "_id": _id,
+                    "reference": value,
+                    "node_type": "LOCATION" if is_location else "ASSET",
+                    "parent_id": parent_id,
+                    "level": level,
+                    "path": path.copy()
                 }
 
-                if extra_fields and level_value == levels[-1]:
+                if not is_location and extra_fields:
+                    asset_data = {}
                     for f in extra_fields:
                         if f in df.columns:
-                            node[f] = normalize(row[f])
+                            asset_data[f] = normalize(row[f])
 
-                nodes[node_id] = node
-            else:
-                node = nodes[node_id]
+                    if asset_data:
+                        doc["asset_data"] = asset_data
 
-            if parent:
-                if node not in parent["children"]:
-                    parent["children"].append(node)
-            else:
-                if node not in roots:
-                    roots.append(node)
+                nodes[node_key] = _id
+                documents.append(doc)
 
-            parent = node
+            parent_id = nodes[node_key]
 
-    return roots
+    return documents
+
 
 def normalize(value):
     if pd.isna(value):
-        return ""
-    if isinstance(value, (int, str, bool)):
+        return None
+    if isinstance(value, (int, float, str, bool)):
         return value
     return str(value)

@@ -38,7 +38,7 @@ class AuthService:
                     detail=f"Error connecting to the authentication server: {str(e)}"
                 )
 
-    async def validate_token(token: str) -> bool:
+    async def validate_token(self, token: str) -> bool:
         async with httpx.AsyncClient() as client:
             try:
                 response = await client.post(
