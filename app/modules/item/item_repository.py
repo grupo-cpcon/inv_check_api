@@ -61,7 +61,7 @@ class ItemRepository:
         doc = {
             "session_id": ObjectId(session_id),
             "item_id": ObjectId(item_id),
-            "parent_id": ObjectId(parent_id),
+            "parent_id": ObjectId(parent_id) if parent_id else None,
             "checked": True,
             "checked_at": datetime.datetime.utcnow(),
             "photos": photos_data,

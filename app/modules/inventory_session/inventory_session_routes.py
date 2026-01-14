@@ -4,11 +4,11 @@ from fastapi import APIRouter, Request
 from datetime import datetime
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
+from requests import session
 from app.core.decorators.auth_decorator import no_auth
 
 router = APIRouter(prefix="/inventory-sessions", tags=["Inventory Sessions"])
 
-@no_auth
 @router.get("/inventory/export/{session_id}")
 async def export_inventory(session_id: str, request: Request):
     db = request.state.db
@@ -51,7 +51,6 @@ async def export_inventory(session_id: str, request: Request):
         }
     )
 
-@no_auth
 @router.get("/dashboard/session/{session_id}")
 async def dashboard_session(session_id: str, request: Request):
     db = request.state.db
@@ -74,7 +73,6 @@ async def dashboard_session(session_id: str, request: Request):
         "percent": percent
     }
 
-@no_auth
 @router.post("")
 async def create_session(body: dict, request: Request):
     db = request.state.db
@@ -90,3 +88,13 @@ async def create_session(body: dict, request: Request):
     session["_id"] = str(result.inserted_id)
 
     return session
+
+@router.get("")
+async def get_sessions(request: Request):
+    db = request.state.db
+    cursor = db.inventory_sessions.find({}).sort("created_at", -1)
+    result = await cursor.to_list()
+    for doc in result:
+        doc["_id"] = str(doc["_id"])
+
+    return result
