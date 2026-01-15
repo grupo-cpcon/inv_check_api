@@ -39,6 +39,7 @@ def build_nodes_from_df(
                     "node_type": "LOCATION" if is_location else "ASSET",
                     "parent_id": parent_id,
                     "level": level,
+                    "checked": None if is_location else False,
                     "path": path.copy()
                 }
 
