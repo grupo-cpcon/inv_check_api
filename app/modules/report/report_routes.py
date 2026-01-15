@@ -1,6 +1,6 @@
 from bson import ObjectId
 from fastapi import APIRouter, Query, Request
-from app.core.decorators.auth_decorator import no_auth
+from motor.motor_asyncio import AsyncIOMotorDatabase
 
 router = APIRouter(prefix="/report", tags=["Report"])
 
@@ -18,17 +18,15 @@ async def get_items(
     if parent_id:
         query = {"parent_id": ObjectId(parent_id)}
     
-    cursor = db.inventory_checks.find(
+    cursor = db.inventory_items.find(
         query, {}
     ).sort("reference", 1).skip(skip).limit(limit)
     
     items = []
-    total_count = await db.inventory_checks.count_documents(query)
+    total_count = await db.inventory_items.count_documents(query)
     
     async for doc in cursor:
         doc["_id"] = str(doc["_id"])
-        doc["session_id"] = str(doc["session_id"])
-        doc["item_id"] = str(doc["item_id"])
         if doc.get("parent_id"):
             doc["parent_id"] = str(doc["parent_id"])
             
@@ -40,4 +38,25 @@ async def get_items(
         "skip": skip,
         "limit": limit,
         "has_more": (skip + limit) < total_count
+    }
+
+@router.get("/dashboard")
+async def dashboard_session(request: Request):
+    db: AsyncIOMotorDatabase = request.state.db
+    
+    total = await db.inventory_items.count_documents({
+        "node_type": "ASSET"
+    })
+
+    inventoried = await db.inventory_items.count_documents({
+        "checked": True
+    })
+
+    percent = round((inventoried / total) * 100, 2) if total else 0
+
+    return {
+        "total_items": total,
+        "inventoried": inventoried,
+        "pending": total - inventoried,
+        "percent": percent
     }
