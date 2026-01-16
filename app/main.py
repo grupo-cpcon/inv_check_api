@@ -32,7 +32,7 @@ app.add_middleware(
         "http://localhost:5173",
         "http://localhost:8080",
         "http://localhost",
-        "https://cpcon-treeinventory-manager.cpcon.co/"
+        "https://cpcon-treeinventory-manager.cpcon.co"
     ],
     allow_credentials=True,
     allow_methods=["*"],
