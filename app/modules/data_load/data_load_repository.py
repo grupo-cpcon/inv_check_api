@@ -2,6 +2,7 @@ from bson import ObjectId
 from fastapi import Query, Request, UploadFile
 import pandas as pd
 from app.services.excel_services import build_nodes_from_df
+from app.shared.storage.s3.objects import storage_s3_retrieve_objects_url
 
 
 class DataLoadRepository:
@@ -37,7 +38,7 @@ class DataLoadRepository:
                 "error": str(e)
             }
     
-    async def get_items(
+    async def get_items(    
         self,
         request: Request,
         parent_id: str | None = Query(default=None)
@@ -53,7 +54,10 @@ class DataLoadRepository:
         ).sort("reference", 1)
     
         items = []
+        
         async for doc in cursor:
+            if 'photos' in doc:
+                doc['photos'] = await storage_s3_retrieve_objects_url(doc.get('photos', None))
             doc["_id"] = str(doc["_id"])
             if doc.get("parent_id"):
                 doc["parent_id"] = str(doc["parent_id"])
