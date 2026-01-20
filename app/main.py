@@ -10,6 +10,7 @@ load_dotenv()
 app = FastAPI(title="FastAPI + MongoDB")
 app.state.public_endpoints = set()
 app.state.no_tenant_required_endpoints = set()
+app.state.async_endpoints = set()
 INITIALIZED_TENANTS = set()
 
 # events
@@ -48,12 +49,14 @@ from app.modules.auth.auth_routes import router as auth_router
 from app.modules.data_load.data_load_routes import router as data_load_router
 from app.modules.tenant.tenant_routes import router as tenant_router
 from app.modules.report.report_routes import router as report_router
+from app.modules.task.task_routes import router as task_router
 
 app.include_router(tenant_router)
 app.include_router(data_load_router)
 app.include_router(item_router)
 app.include_router(auth_router)
 app.include_router(report_router)
+app.include_router(task_router)
 
 def create_test_app():
     app = FastAPI()
@@ -63,4 +66,5 @@ def create_test_app():
     app.include_router(data_load_router)
     app.include_router(item_router)
     app.include_router(auth_router)
+    app.include_router(task_router)
     return app

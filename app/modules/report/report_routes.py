@@ -1,6 +1,20 @@
 from bson import ObjectId
 from fastapi import APIRouter, Query, Request
 from motor.motor_asyncio import AsyncIOMotorDatabase
+from app.modules.task.task_choices import AsyncTaskResultType
+from app.modules.task.task_schemas import AsyncTaskCreateResponse
+from app.modules.task.task_repository import AsyncTaskRepository
+from fastapi import BackgroundTasks, status
+
+# schemas
+from app.modules.report.report_schemas import (
+    CreateAnalyticalReportRequest
+)
+
+# services
+from app.modules.report.report_repository import (
+    ReportAnaliticalService
+)
 
 router = APIRouter(prefix="/report", tags=["Report"])
 
@@ -60,3 +74,26 @@ async def dashboard_session(request: Request):
         "pending": total - inventoried,
         "percent": percent
     }
+
+@router.post(
+    "/analytical", 
+    response_model=AsyncTaskCreateResponse,
+    status_code=status.HTTP_202_ACCEPTED
+)
+async def create_analytical_report(
+    request: Request, 
+    background_tasks: BackgroundTasks,
+    payload: CreateAnalyticalReportRequest    
+) -> AsyncTaskCreateResponse:   
+
+    parent_ids = payload.parent_ids
+    task_repository = AsyncTaskRepository(request.state.db)
+
+    async_task = await task_repository.create(
+        background_async_tasks=background_tasks,
+        func=ReportAnaliticalService(request.state.db).create_analitical_report,
+        params={"parent_ids": parent_ids},
+        result_type=AsyncTaskResultType.ARCHIVE
+    )
+
+    return async_task

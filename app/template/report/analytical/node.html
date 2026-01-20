@@ -1,0 +1,37 @@
+<li class="node-wrapper">
+  <div class="node-card {% if node.node_type in ['LOCATION','location'] %}localidade{% endif %}">
+    <div class="node-header">
+      <span class="node-type">
+        {% if node.node_type in ['LOCATION','location'] %}LOCAL{% else %}ATIVO{% endif %}
+      </span>
+      <span class="node-name">{{ node.name }}</span>
+      {% if node.node_type not in ['LOCATION','location'] %}
+        <span class="node-status {% if node.is_checked %}verified{% else %}pending{% endif %}">
+          {% if node.is_checked %}✔ Verificado{% else %}✖ Pendente{% endif %}
+        </span>
+      {% endif %}
+    </div>
+    {% if node.is_checked and node.checked_at %}
+      <div style="margin-top:6px;font-size:9pt;color:#64748b;">
+        Auditado em: {{ node.checked_at.strftime("%d/%m/%Y às %H:%M") }}
+      </div>
+    {% endif %}
+
+    {% if node.photos %}
+      <div class="photos">
+        {% for photo in node.photos %}
+          <img src="{{ photo }}" class="photo">
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+  {% if node.children %}
+    <ul class="tree">
+      {% for child in node.children %}
+        {% with node=child %}
+          {% include "report/analytical/node.html" %}
+        {% endwith %}
+      {% endfor %}
+    </ul>
+  {% endif %}
+</li>
