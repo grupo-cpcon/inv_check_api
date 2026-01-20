@@ -10,7 +10,6 @@ load_dotenv()
 app = FastAPI(title="FastAPI + MongoDB")
 app.state.public_endpoints = set()
 app.state.no_tenant_required_endpoints = set()
-app.state.async_endpoints = set()
 INITIALIZED_TENANTS = set()
 
 # events
