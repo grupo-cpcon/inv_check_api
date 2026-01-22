@@ -55,12 +55,12 @@ class AsyncTaskRepository:
 
                 await self.collection.update_one(
                     {"_id": async_task_id},
-                    {"$set": {"status": AsyncTaskStatus.SUCCESS.value, "progress": 100, "result": result}}
+                    {"$set": {"status": AsyncTaskStatus.COMPLETED.value, "progress": 100, "result": result}}
                 )
             except Exception as error:
                 await self.collection.update_one(
                     {"_id": async_task_id},
-                    {"$set": {"status": AsyncTaskStatus.ERROR.value, "error": str(error)}}
+                    {"$set": {"status": AsyncTaskStatus.FAILED.value, "error": str(error)}}
                 )
 
         background_async_tasks.add_task(task_runner)
