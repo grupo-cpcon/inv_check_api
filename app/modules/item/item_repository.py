@@ -7,6 +7,7 @@ from starlette.datastructures import UploadFile
 import asyncio
 from typing import List
 from motor.motor_asyncio import AsyncIOMotorDatabase
+import json
 
 
 class ItemRepository:
@@ -16,13 +17,16 @@ class ItemRepository:
 
         item_id: str = form.get("item_id")
         
+        if not item_id:
+            return await self.create_item(request, form)
+        
         item = await db.inventory_items.find_one({"_id": ObjectId(item_id)})
         
         if not item:
             raise HTTPException(404, "Item não encontrado")
 
-        if item.get("checked"):
-            raise HTTPException(400, "Item já inventariado")
+        # if item.get("checked"):
+        #     raise HTTPException(400, "Item já inventariado")
 
         photos = form.getlist("photos") if "photos" in form else []
         base_item_photo_path = (
@@ -39,6 +43,14 @@ class ItemRepository:
             "photos": photos_data,
         }
 
+        asset_data_str = form.get("asset_data")
+        if asset_data_str:
+            try:
+                asset_data = json.loads(asset_data_str)
+                doc["asset_data"] = asset_data
+            except json.JSONDecodeError:
+                pass
+
         await db.inventory_items.update_one(
             {"_id": ObjectId(item_id)},
             {"$set": doc})
@@ -50,9 +62,105 @@ class ItemRepository:
             "checked_at": datetime.datetime.utcnow(),
             "photos": await storage_s3_retrieve_objects_url(photos_data),
             "reference": item["reference"],
-            "asset_data": item["asset_data"],
+            "asset_data": doc.get("asset_data", item.get("asset_data")),
             "path": item["path"]
         }
+    
+    async def create_item(self, request: Request, form):
+        db: AsyncIOMotorDatabase = request.state.db
+        
+        reference = form.get("reference")
+        parent_id_str = form.get("parent_id")
+        
+        if not reference:
+            raise HTTPException(400, "Referência é obrigatória")
+        
+        if not parent_id_str:
+            raise HTTPException(400, "Item pai é obrigatório")
+        
+        parent_id = ObjectId(parent_id_str)
+        parent_item = await db.inventory_items.find_one({"_id": parent_id})
+        if not parent_item:
+            raise HTTPException(400, "Item pai não encontrado")
+        
+        root_reference = parent_item.get("path", [])[0] if parent_item.get("path") else None
+        
+        if root_reference:
+            root_node = await db.inventory_items.find_one({
+                "reference": root_reference,
+                "parent_id": None
+            })
+        else:
+            root_node = parent_item
+            while root_node and root_node.get("parent_id") is not None:
+                root_node = await db.inventory_items.find_one({"_id": root_node["parent_id"]})
+        
+        if not root_node:
+            raise HTTPException(500, "Não foi possível encontrar a localização raiz")
+        
+        existing_item = await db.inventory_items.find_one({
+            "reference": reference,
+            "path.0": root_node["reference"]
+        })
+        
+        if existing_item:
+            raise HTTPException(
+                400, 
+                f"Já existe um item com a referência '{reference}' nesta árvore"
+            )
+        
+        level = parent_item.get("level", 0) + 1
+        path = parent_item.get("path", []) + [reference]
+        
+        item_id = ObjectId()
+        
+        photos = form.getlist("photos") if "photos" in form else []
+        photos_data = []
+        if photos:
+            base_item_photo_path = ItemStoragePaths(
+                client_name=db.name,
+                item_id=item_id
+            ).images
+            photos_data = await self.perform_save_item_photos(photos, base_item_photo_path)
+        
+        asset_data = None
+        asset_data_str = form.get("asset_data")
+        if asset_data_str:
+            try:
+                asset_data = json.loads(asset_data_str)
+            except json.JSONDecodeError:
+                
+                pass
+        
+        doc = {
+            "_id": item_id,
+            "reference": reference,
+            "node_type": "ASSET",
+            "parent_id": parent_id,
+            "level": level,
+            "checked": True,
+            "checked_at": datetime.datetime.utcnow(),
+            "path": path,
+            "photos": photos_data,
+        }
+        
+        if asset_data:
+            doc["asset_data"] = asset_data
+        
+        await db.inventory_items.insert_one(doc)
+        
+        return {
+            "id": str(item_id),
+            "parent_id": str(parent_id) if parent_id else None,
+            "reference": reference,
+            "checked": True,
+            "checked_at": datetime.datetime.utcnow(),
+            "photos": await storage_s3_retrieve_objects_url(photos_data),
+            "asset_data": asset_data,
+            "path": path,
+            "level": level
+        }
+    
 
     async def perform_save_item_photos(self, photos: List[UploadFile], base_item_photo_path: str) -> List[str]:
         if not photos:
