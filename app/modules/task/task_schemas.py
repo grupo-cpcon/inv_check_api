@@ -3,6 +3,7 @@ from typing import Any, Optional
 from app.modules.task.task_choices import AsyncTaskStatus, AsyncTaskResultType
 from datetime import datetime
 from app.shared.datetime import time_now
+from dataclasses import dataclass
 
 class AsyncTaskCreateRequest(BaseModel):
     status: AsyncTaskStatus = AsyncTaskStatus.PENDING.value
@@ -35,3 +36,8 @@ class AsyncTaskCreateResponse(BaseModel):
         "from_attributes": True,
         "populate_by_name": True
     }
+
+@dataclass(frozen=True)
+class AsyncTaskSpec:
+    handler: callable
+    result_type: AsyncTaskResultType

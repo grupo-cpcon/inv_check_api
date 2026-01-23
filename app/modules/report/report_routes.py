@@ -5,6 +5,7 @@ from app.modules.task.task_choices import AsyncTaskResultType
 from app.modules.task.task_schemas import AsyncTaskCreateResponse
 from app.modules.task.task_repository import AsyncTaskRepository
 from fastapi import BackgroundTasks, status
+from app.modules.task.task_choices import AsyncTaskType
 
 # schemas
 from app.modules.report.report_schemas import (
@@ -82,18 +83,13 @@ async def dashboard_session(request: Request):
 )
 async def create_analytical_report(
     request: Request, 
-    background_tasks: BackgroundTasks,
     payload: CreateAnalyticalReportRequest    
 ) -> AsyncTaskCreateResponse:   
 
-    parent_ids = payload.parent_ids
-    task_repository = AsyncTaskRepository(request.state.db)
-
-    async_task = await task_repository.create(
-        background_async_tasks=background_tasks,
-        func=ReportAnaliticalService(request.state.db).create_analitical_report,
-        params={"parent_ids": parent_ids},
-        result_type=AsyncTaskResultType.ARCHIVE
+    repository = AsyncTaskRepository(request.state.db)
+    async_task = await repository.create(
+        task_type=AsyncTaskType.EXPORT_ANALYTICAL,
+        params={"parent_ids": payload.parent_ids}
     )
 
     return async_task

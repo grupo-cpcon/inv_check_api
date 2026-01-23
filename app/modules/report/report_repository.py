@@ -1,6 +1,6 @@
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from bson import ObjectId
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Tuple
 from datetime import datetime
 
 from jinja2 import Environment, FileSystemLoader
@@ -14,13 +14,32 @@ from starlette.datastructures import UploadFile
 from zoneinfo import ZoneInfo
 
 from app.shared.datetime import time_now
+import json
 
 class ReportAnaliticalService:
     def __init__(self, database: AsyncIOMotorDatabase):
         self.db = database
 
-    async def create_analitical_report(self, parent_ids: Optional[List[str]]) -> UploadFile:
-        tree = await self.build_items_tree(parent_ids)
+    # only for debug, shit
+    def to_json_safe(self, obj):
+        if isinstance(obj, dict):
+            return {
+                str(k): self.to_json_safe(v)
+                for k, v in obj.items()
+            }
+        elif isinstance(obj, list):
+            return [self.to_json_safe(i) for i in obj]
+        elif isinstance(obj, ObjectId):
+            return str(obj)
+        elif isinstance(obj, datetime):
+            return obj.isoformat()
+        else:
+            return obj
+
+    async def create_analitical_report(self, parent_location_ids: Optional[List[str]]) -> UploadFile:
+        data = await self.build_data(parent_location_ids)
+        json_safe_data = self.to_json_safe(data)
+        print(json.dumps(json_safe_data, indent=4, ensure_ascii=False))
 
         env = Environment(
             loader=FileSystemLoader("app/template"),
@@ -47,128 +66,74 @@ class ReportAnaliticalService:
 
         return upload_file
 
-    async def build_items_tree(self, parent_ids: Optional[List[str]] = None) -> List[ItemNodeDTO]:
-        valid_root_ids = await self._get_valid_roots(parent_ids)
-        root_object_ids = [ObjectId(rid) for rid in valid_root_ids]
+    async def build_data(self, parent_locations_ids: Optional[List[str]] = None) -> Dict[Tuple[str, str], List[Dict]]:
+        locations_ids = await self.get_all_descendant_locations(parent_locations_ids)
+        loc_obj_ids = [ObjectId(l_id) for l_id in locations_ids]
 
-        roots_docs = await self.db.inventory_items.find(
-            {"_id": {"$in": root_object_ids}},
+        loc_docs = await self.db.inventory_items.find({"_id": {"$in": loc_obj_ids}}, {"_id": 1, "path": 1}).to_list(None)
+        loc_map = {l["_id"]: (str(l["_id"]), " -> ".join(l.get("path", []))) for l in loc_docs}
+
+        pipeline = [
+            {"$match": {"parent_id": {"$in": loc_obj_ids}, "node_type": {"$ne": "LOCATION"}}},
             {
-                "_id": 1,
-                "reference": 1,
-                "node_type": 1,
-                "parent_id": 1,
-                "checked": 1,
-                "checked_at": 1,
-                "photos": 1,
-            }
-        ).to_list(None)
-
-        nodes: Dict[str, ItemNodeDTO] = {}
-        roots: List[ItemNodeDTO] = []
-
-        for doc in roots_docs:
-            node_id = str(doc["_id"])
-            node = ItemNodeDTO(
-                _id=node_id,
-                name=doc.get("reference"),
-                node_type=doc.get("node_type"),
-                is_checked=doc.get("checked", False),
-                checked_at=doc.get("checked_at"),
-                photos=await storage_s3_retrieve_objects_url(
-                    doc.get("photos", [])
-                ),
-            )
-
-            nodes[node_id] = node
-            roots.append(node)
-
-        queue: List[str] = list(nodes.keys())
-
-        while queue:
-            parent_id = queue.pop(0)
-            parent_node = nodes[parent_id]
-
-            children_docs = await self.db.inventory_items.find(
-                {"parent_id": ObjectId(parent_id)},
-                {
-                    "_id": 1,
-                    "reference": 1,
-                    "node_type": 1,
-                    "parent_id": 1,
-                    "checked": 1,
-                    "checked_at": 1,
-                    "photos": 1,
+                "$graphLookup": {
+                    "from": "inventory_items",
+                    "startWith": "$_id",
+                    "connectFromField": "_id",
+                    "connectToField": "parent_id",
+                    "as": "descendants",
+                    "restrictSearchWithMatch": {"node_type": {"$ne": "LOCATION"}}
                 }
-            ).to_list(None)
+            },
+            {"$addFields": {"root_loc": "$parent_id"}},
+            {"$project": {"docs": {"$concatArrays": [["$$ROOT"], "$descendants"]}, "root_loc": 1}},
+            {"$unwind": "$docs"},
+            {"$addFields": {"docs.root_loc": "$root_loc"}},
+            {"$replaceRoot": {"newRoot": "$docs"}},
+            {"$project": {"descendants": 0}}
+        ]
+        
+        flattened_items = await self.db.inventory_items.aggregate(pipeline).to_list(None)
 
-            for child in children_docs:
-                child_id = str(child["_id"])
+        result: Dict[Tuple[str, str], List[Dict]] = {}
+        for item in flattened_items:
+            root_loc_id = item.get("root_loc")
+            key = loc_map.get(root_loc_id)
+            if key:
+                if key not in result:
+                    result[key] = []
+                result[key].append(item)
 
-                if child_id in nodes:
-                    continue
-
-                child_node = ItemNodeDTO(
-                    _id=child_id,
-                    name=child.get("reference"),
-                    node_type=child.get("node_type"),
-                    is_checked=child.get("checked", False),
-                    checked_at=child.get("checked_at"),
-                    photos=await storage_s3_retrieve_objects_url(
-                        child.get("photos", [])
-                    ),
-                )
-
-                parent_node.children.append(child_node)
-                nodes[child_id] = child_node
-                queue.append(child_id)
-
-        return roots
-
-    async def _get_valid_roots(self, raw_root_ids: Optional[List[str]]) -> List[str]:
-        if not raw_root_ids:
+        return result
+        
+    async def get_all_descendant_locations(
+        self, parent_location_ids: Optional[List[str]] = None
+    ) -> List[str]:
+        if not parent_location_ids:
             docs = await self.db.inventory_items.find(
-                {"level": 0},
-                {"_id": 1}
+                {"node_type": "LOCATION"}, {"_id": 1}
             ).to_list(None)
-
             return [str(doc["_id"]) for doc in docs]
 
-        root_object_ids = [ObjectId(rid) for rid in raw_root_ids]
-        docs = await self.db.inventory_items.find(
-            {"_id": {"$in": root_object_ids}},
-            {"_id": 1, "parent_id": 1}
-        ).to_list(None)
+        obj_ids = [ObjectId(pid) for pid in parent_location_ids]
 
-        id_to_parent = {
-            str(doc["_id"]): str(doc["parent_id"])
-            if doc.get("parent_id") else None
-            for doc in docs
-        }
+        pipeline = [
+            {"$match": {"_id": {"$in": obj_ids}}},
+            {
+                "$graphLookup": {
+                    "from": "inventory_items",
+                    "startWith": "$_id",
+                    "connectFromField": "_id",
+                    "connectToField": "parent_id",
+                    "as": "descendants"
+                }
+            },
+            {"$unwind": "$descendants"},
+            {"$match": {"descendants.node_type": "LOCATION"}},
+            {"$group": {"_id": "$descendants._id"}}
+        ]
 
-        input_id_set: Set[str] = set(id_to_parent.keys())
-        valid_roots: List[str] = []
-
-        for item_id in input_id_set:
-            current_parent = id_to_parent.get(item_id)
-            is_child = False
-
-            while current_parent:
-                if current_parent in input_id_set:
-                    is_child = True
-                    break
-
-                parent_doc = await self.db.inventory_items.find_one(
-                    {"_id": ObjectId(current_parent)},
-                    {"parent_id": 1}
-                )
-
-                if not parent_doc or not parent_doc.get("parent_id"):
-                    break
-
-                current_parent = str(parent_doc["parent_id"])
-
-            if not is_child:
-                valid_roots.append(item_id)
-
-        return valid_roots
+        cursor = self.db.inventory_items.aggregate(pipeline)
+        results = await cursor.to_list(None)
+        
+        return [str(doc["_id"]) for doc in results]

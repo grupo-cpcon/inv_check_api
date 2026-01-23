@@ -20,16 +20,19 @@ async def retreave_task(request: Request, task_id: str) -> AsyncTaskListResponse
 
     if not async_task:
         raise HTTPException(status_code=404, detail="Task not found.")
-    
+
+    if (
+        async_task.get("status", None) == "COMPLETED" 
+        and async_task.get("result_type", None) == AsyncTaskResultType.ARCHIVE.value
+        and async_task.get("result", None)
+    ):
+        async_task["result"] = await storage_s3_retrieve_objects_url(async_task["result"])
+
     return AsyncTaskListResponse(
         _id=str(async_task["_id"]),
         status=async_task["status"],
         result_type=async_task["result_type"],
         progress=async_task["progress"],
-        result=(
-            async_task.get("result") 
-            if async_task["result_type"] != AsyncTaskResultType.ARCHIVE.value
-            else await storage_s3_retrieve_objects_url(async_task.get("result"))
-        ),
+        result=async_task["result"],
         error=async_task.get("error")
     )
