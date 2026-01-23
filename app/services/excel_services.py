@@ -1,3 +1,4 @@
+from pprint import pprint
 from bson import ObjectId
 import pandas as pd
 
@@ -5,12 +6,12 @@ import pandas as pd
 def build_nodes_from_df(
     df: pd.DataFrame,
     delimiter_column: str,
-    extra_fields: list[str] = None
+    extra_fields: list[str] = None,
+    nodes = {},
 ):
     delimiter_index = df.columns.get_loc(delimiter_column)
     level_columns = list(df.columns[:delimiter_index])
 
-    nodes = {}
     documents = []
 
     for _, row in df.iterrows():
@@ -27,7 +28,7 @@ def build_nodes_from_df(
             path.append(value)
 
             node_key = (value, parent_id)
-
+            
             if node_key not in nodes:
                 _id = ObjectId()
 
@@ -51,8 +52,33 @@ def build_nodes_from_df(
 
                     if asset_data:
                         doc["asset_data"] = asset_data
+                        
 
                 nodes[node_key] = _id
+                documents.append(doc)
+            else:
+                _id = nodes[node_key]
+                is_location = col.lower().startswith("loc")
+
+                doc = {
+                    "_id": _id,
+                    "reference": value,
+                    "node_type": "LOCATION" if is_location else "ASSET",
+                    "parent_id": parent_id,
+                    "level": level,
+                    "checked": None if is_location else False,
+                    "path": path.copy()
+                }
+
+                if not is_location and extra_fields:
+                    asset_data = {}
+                    for f in extra_fields:
+                        if f in df.columns:
+                            asset_data[f] = normalize(row[f])
+
+                    if asset_data:
+                        doc["asset_data"] = asset_data
+
                 documents.append(doc)
 
             parent_id = nodes[node_key]
