@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Request
+from bson import ObjectId
+from fastapi import APIRouter, HTTPException, Request
 from app.core.decorators.auth_decorator import no_auth
 from app.modules.item.item_repository import ItemRepository
 
@@ -11,6 +12,7 @@ async def create(request: Request):
 
 @router.delete("/{object_id}")
 async def destroy(
+    object_id: str,
     request: Request,
 ):
     if not ObjectId.is_valid(object_id):
@@ -18,7 +20,7 @@ async def destroy(
 
     deleted_count = await repository.destroy_cascade(
         request.state.db,
-        ObjectId(item_id)
+        ObjectId(object_id)
     )
 
     return {

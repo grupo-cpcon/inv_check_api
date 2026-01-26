@@ -84,7 +84,9 @@ class ItemRepository:
             }
         ]
 
-        ids_to_delete = docs[0]["ids"]
+        cursor = db.inventory_items.aggregate(pipeline)
+        docs = await cursor.to_list(length=None)
+        ids_to_delete = [doc["_id"] for doc in docs]
         result = await db.inventory_items.delete_many({
             "_id": {"$in": ids_to_delete}
         })
