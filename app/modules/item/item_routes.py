@@ -8,3 +8,20 @@ repository = ItemRepository()
 @router.post("")
 async def create(request: Request):
     return await repository.check_item(request)
+
+@router.delete("/{object_id}")
+async def destroy(
+    request: Request,
+):
+    if not ObjectId.is_valid(object_id):
+        raise HTTPException(status_code=400, detail="ObjectId inválido")
+
+    deleted_count = await repository.destroy_cascade(
+        request.state.db,
+        ObjectId(item_id)
+    )
+
+    return {
+        "status": "ok",
+        "deleted_count": deleted_count
+    }
