@@ -179,6 +179,45 @@ class ItemRepository:
         }
     
 
+    async def destroy_cascade(self, db: AsyncIOMotorDatabase, object_id: ObjectId):
+        pipeline = [
+            {"$match": {"_id": object_id}},
+            {
+                "$graphLookup": {
+                    "from": "inventory_items",
+                    "startWith": "$_id",
+                    "connectFromField": "_id",
+                    "connectToField": "parent_id",
+                    "as": "descendants"
+                }
+            },
+            {
+                "$project": {
+                    "items": {
+                        "$concatArrays": [["$$ROOT"], "$descendants"]
+                    }
+                }
+            },
+            {"$unwind": "$items"},
+            {
+                "$project": {
+                    "_id": "$items._id",
+                    "reference": "$items.reference",
+                    "path": "$items.path",
+                    "node_type": "$items.node_type"
+                }
+            }
+        ]
+
+        cursor = db.inventory_items.aggregate(pipeline)
+        docs = await cursor.to_list(length=None)
+        ids_to_delete = [doc["_id"] for doc in docs]
+        result = await db.inventory_items.delete_many({
+            "_id": {"$in": ids_to_delete}
+        })
+
+        return result.deleted_count
+
     async def perform_save_item_photos(self, photos: List[UploadFile], base_item_photo_path: str) -> List[str]:
         if not photos:
             return []
