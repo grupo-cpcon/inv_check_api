@@ -51,19 +51,36 @@ class ItemRepository:
             except json.JSONDecodeError:
                 pass
 
+        new_parent_id_str = form.get("parent_id")
+        new_path = item["path"]
+        if new_parent_id_str:
+            new_parent_id = ObjectId(new_parent_id_str)
+            
+            if new_parent_id != item.get("parent_id"):
+                new_parent = await db.inventory_items.find_one({"_id": new_parent_id})
+                if not new_parent:
+                    raise HTTPException(400, "Item pai não encontrado")
+                
+                new_level = new_parent.get("level", 0) + 1
+                new_path = new_parent.get("path", []) + [item["reference"]]
+                
+                doc["parent_id"] = new_parent_id
+                doc["level"] = new_level
+                doc["path"] = new_path
+
         await db.inventory_items.update_one(
             {"_id": ObjectId(item_id)},
             {"$set": doc})
 
         return {
             "id": item_id,
-            "parent_id": str(item.get("parent_id")),
+            "parent_id": str(doc.get("parent_id", item.get("parent_id"))),
             "checked": True,
             "checked_at": datetime.datetime.utcnow(),
             "photos": await storage_s3_retrieve_objects_url(photos_data),
             "reference": item["reference"],
             "asset_data": doc.get("asset_data", item.get("asset_data")),
-            "path": item["path"]
+            "path": new_path
         }
     
     async def create_item(self, request: Request, form):
