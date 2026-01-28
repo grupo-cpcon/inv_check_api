@@ -66,7 +66,8 @@ class AssetInventoryResponsibilityReportService:
         item_docs = await self.db.inventory_items.aggregate([
             {
                 "$match": {
-                    "parent_id": {"$in": locations_ids}
+                    "parent_id": {"$in": locations_ids},
+                    "node_type": {"$ne": "LOCATION"}
                 }
             },
             {
