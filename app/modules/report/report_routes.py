@@ -9,12 +9,8 @@ from app.modules.task.task_choices import AsyncTaskType
 
 # schemas
 from app.modules.report.report_schemas import (
+    CreateInventoryResponsabilityAgreementReportRequest,
     CreateAnalyticalReportRequest
-)
-
-# services
-from app.modules.report.report_repository import (
-    ReportAnaliticalService
 )
 
 router = APIRouter(prefix="/report", tags=["Report"])
@@ -77,6 +73,24 @@ async def dashboard_session(request: Request):
     }
 
 @router.post(
+    "/inventory-responsability-agreement", 
+    response_model=AsyncTaskCreateResponse,
+    status_code=status.HTTP_202_ACCEPTED
+)
+async def create_inventory_responsability_agreement_report(
+    request: Request, 
+    payload: CreateInventoryResponsabilityAgreementReportRequest    
+) -> AsyncTaskCreateResponse:   
+
+    repository = AsyncTaskRepository(request.state.db)
+    async_task = await repository.create(
+        task_type=AsyncTaskType.EXPORT_INVENTORY_RESPONSABILITY_AGREEMENT_REPORT,
+        params={"parent_location_ids": payload.parent_location_ids}
+    )
+
+    return async_task
+
+@router.post(
     "/analytical", 
     response_model=AsyncTaskCreateResponse,
     status_code=status.HTTP_202_ACCEPTED
@@ -88,7 +102,7 @@ async def create_analytical_report(
 
     repository = AsyncTaskRepository(request.state.db)
     async_task = await repository.create(
-        task_type=AsyncTaskType.EXPORT_ANALYTICAL,
+        task_type=AsyncTaskType.EXPORT_ANALYTICALT_REPORT,
         params={"parent_ids": payload.parent_ids}
     )
 

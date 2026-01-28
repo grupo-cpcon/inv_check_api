@@ -23,40 +23,35 @@ class BaseAsyncTaskHandler(ABC):
 
     async def run(self, params: dict) -> None:
         try:
-            await self._set_status(
-                AsyncTaskStatus.IN_PROGRESS
+            await self.update_attributes(
+                status=AsyncTaskStatus.IN_PROGRESS.value,
+                progress=5
             )
 
             result = await self.execute(params)
-            await update_attributes(
-                collection=self.collection,
-                object_id=self.task_id,
-                progress=50
+            await self.update_attributes(
+                progress=70
             )
+            
             result = await self._handle_result(result)
-            await update_attributes(
-                collection=self.collection,
-                object_id=self.task_id,
-                progress=99
-            )
-
-            await self._set_status(
-                AsyncTaskStatus.COMPLETED,
+            await self.update_attributes(
+                status=AsyncTaskStatus.COMPLETED.value,
                 progress=100,
                 result=result
             )
 
         except Exception as exc:
-            await self._set_status(
-                AsyncTaskStatus.FAILED,
-                error=str(exc),
+            await self.update_attributes(
+                status=AsyncTaskStatus.FAILED.value,
+                log=str(exc),
             )
             raise
 
-    async def _set_status(self, status: AsyncTaskStatus, **extra: Dict[Any, Any]) -> None:
-        await self.collection.update_one(
-            {"_id": self._oid()},
-            {"$set": {"status": status.value, **extra}},
+    async def update_attributes(self, **args):
+        await update_attributes(
+            collection=self.collection,
+            object_id=self._oid,
+            **args
         )
 
     async def _handle_result(self, result: Any) -> str:
@@ -74,6 +69,7 @@ class BaseAsyncTaskHandler(ABC):
 
         return key
 
+    @property
     def _oid(self) -> ObjectId:
         return ObjectId(self.task_id)
 
