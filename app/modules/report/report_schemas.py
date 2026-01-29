@@ -6,7 +6,7 @@ import datetime
 from bson import ObjectId
 import datetime
 
-class CreateInventoryResponsabilityAgreementReportRequest(BaseModel):
+class CreateInventoryResponsibilityAgreementReportRequest(BaseModel):
     parent_location_ids: List[str]
     
 class CreateAnalyticalReportRequest(BaseModel):

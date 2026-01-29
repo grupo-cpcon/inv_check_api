@@ -9,7 +9,7 @@ from app.modules.task.task_choices import AsyncTaskType
 
 # schemas
 from app.modules.report.report_schemas import (
-    CreateInventoryResponsabilityAgreementReportRequest,
+    CreateInventoryResponsibilityAgreementReportRequest,
     CreateAnalyticalReportRequest
 )
 
@@ -73,18 +73,18 @@ async def dashboard_session(request: Request):
     }
 
 @router.post(
-    "/inventory-responsability-agreement", 
+    "/inventory-responsibility-agreement", 
     response_model=AsyncTaskCreateResponse,
     status_code=status.HTTP_202_ACCEPTED
 )
-async def create_inventory_responsability_agreement_report(
+async def create_inventory_responsibility_agreement_report(
     request: Request, 
-    payload: CreateInventoryResponsabilityAgreementReportRequest    
+    payload: CreateInventoryResponsibilityAgreementReportRequest    
 ) -> AsyncTaskCreateResponse:   
 
     repository = AsyncTaskRepository(request.state.db)
     async_task = await repository.create(
-        task_type=AsyncTaskType.EXPORT_INVENTORY_RESPONSABILITY_AGREEMENT_REPORT,
+        task_type=AsyncTaskType.EXPORT_INVENTORY_RESPONSIBILITY_AGREEMENT_REPORT,
         params={"parent_location_ids": payload.parent_location_ids}
     )
 

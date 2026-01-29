@@ -2,7 +2,7 @@ from app.modules.report.report_repository import AssetInventoryResponsibilityRep
 from app.modules.task.handlers.base_handler import BaseAsyncTaskHandler
 from typing import Dict, Any
 
-class ExportInventoryResponsabilityAgreementReportHandler(BaseAsyncTaskHandler):
+class ExportInventoryResponsibilityAgreementReportHandler(BaseAsyncTaskHandler):
     async def execute(self, params: Dict[Any, Any]):
         service = AssetInventoryResponsibilityReportService(self.db)
         return await service.create_inventory_responsibility_agreement_report(

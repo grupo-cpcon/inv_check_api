@@ -1,5 +1,5 @@
 from app.modules.task.task_choices import AsyncTaskResultType, AsyncTaskType
-from app.modules.task.handlers.export_inventory_respponsability_agreement_report_handler import ExportInventoryResponsabilityAgreementReportHandler
+from app.modules.task.handlers.export_inventory_respponsability_agreement_report_handler import ExportInventoryResponsibilityAgreementReportHandler
 from app.modules.task.handlers.export_analytical_report_handler import ExportAnalyticalReportHandler
 
 from app.modules.task.task_schemas import AsyncTaskSpec
@@ -7,8 +7,8 @@ from app.modules.task.task_schemas import AsyncTaskSpec
 
 class AsyncTaskFactory:
     _registry = {
-        AsyncTaskType.EXPORT_INVENTORY_RESPONSABILITY_AGREEMENT_REPORT: AsyncTaskSpec(
-            handler=ExportInventoryResponsabilityAgreementReportHandler,
+        AsyncTaskType.EXPORT_INVENTORY_RESPONSIBILITY_AGREEMENT_REPORT: AsyncTaskSpec(
+            handler=ExportInventoryResponsibilityAgreementReportHandler,
             result_type=AsyncTaskResultType.ARCHIVE
         ),
         AsyncTaskType.EXPORT_ANALYTICALT_REPORT: AsyncTaskSpec(
