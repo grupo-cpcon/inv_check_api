@@ -5,12 +5,18 @@ from dataclasses import dataclass, field
 import datetime
 from bson import ObjectId
 import datetime
+from app.modules.report.report_choices import HierarchyStandChoice, ImageExportModeChoice
+
 
 class CreateInventoryResponsibilityAgreementReportRequest(BaseModel):
     parent_location_ids: List[str]
     
 class CreateAnalyticalReportRequest(BaseModel):
     parent_ids: List[str]
+
+class ImagesExportRequest(BaseModel):
+    mode: ImageExportModeChoice
+    parent_id: Optional[str] = None
 
 @dataclass
 class InventoryResposabilityAgreementItemDTO:
@@ -35,8 +41,11 @@ class InventoryResposabilityAgreementLocationDTO:
 @dataclass
 class AnalyticalReportRawDataDTO:
     _id: ObjectId
+    level: int
+    hierarchy_stand: HierarchyStandChoice
     reference: Optional[str] = None
-    checked: Optional[bool] = None
+    checked: Optional[bool] = False
     checked_at: Optional[datetime.datetime] = None
-    path: Optional[List[str]] = None
-    asset_data: Optional[Dict[str, Any]] = None
+    asset_data: Optional[Dict[str, Any]] = field(default_factory=dict)
+    location_path: Optional[List[str]] = field(default_factory=list)
+    hierarchy_path: Optional[List[str]] = field(default_factory=list)

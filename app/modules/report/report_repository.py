@@ -9,7 +9,7 @@ from jinja2 import Environment, FileSystemLoader
 from weasyprint import HTML
 from starlette.datastructures import UploadFile
 
-from app.shared.storage.s3.objects import storage_s3_retrieve_objects_url
+from app.shared.storage.s3.objects import storage_s3_retrieve_objects_url, generate_s3_temporary_storage_object_key
 from app.shared.storage.utils import download_file_base64
 from app.shared.datetime import time_now
 import pandas
@@ -18,6 +18,15 @@ from openpyxl.utils import get_column_letter
 from pathlib import Path
 
 from colorsys import hls_to_rgb
+from app.modules.report.report_choices import HierarchyStandChoice, ImageExportModeChoice
+from app.shared.database.pipelines.inventory_items import InventoryItemsPipelines
+
+from app.shared.stream.image_zipstream import ImageStreamingZipWriter
+from app.shared.storage.s3.multi_part_uploader import MultipartUploader
+from app.shared.global_functions.download_storage_objects import DownloadStorageObjecs
+import uuid
+from app.shared.files.files_type_choices import FileTypeChoices
+
 
 from app.modules.report.report_schemas import (
     InventoryResposabilityAgreementItemDTO,
@@ -146,10 +155,10 @@ class AssetInventoryResponsibilityReportService:
             key=lambda loc: len(loc.items) == 0
         )
 
-        await self._resolve_photos_parallel(sorted_locations)
+        await self.download_by_path(sorted_locations)
         return list(sorted_locations)
 
-    async def _resolve_photos_parallel(
+    async def download_by_path(
         self,
         locations: List[InventoryResposabilityAgreementLocationDTO]
     ) -> None:
@@ -301,34 +310,66 @@ class AnalyticalReportService:
     ) -> List[Dict[str, Any]]:
 
         raw_data = await self._get_raw_data(parent_ids)
-        asset_keys = set()
-        max_path_len = 0
+        max_loc_path_length = 0
+        max_hierarchy_path_length = 0
 
         for item in raw_data:
-            if item.path:
-                max_path_len = max(max_path_len, len(item.path))
-            if item.asset_data:
-                asset_keys.update(item.asset_data.keys())
+            if item.location_path:
+                max_loc_path_length = max(max_loc_path_length, len(item.location_path))
+            if item.hierarchy_path:
+                max_hierarchy_path_length = max(max_hierarchy_path_length, len(item.hierarchy_path))
 
         rows: List[Dict[str, Any]] = []
         for item in raw_data:
             row: Dict[str, Any] = {}
 
-            for index in range(max_path_len):
-                col_name = f"PATH_{index+1}"
+            for index in range(max_loc_path_length):
+                col_name = f"LOC {index+1}"
                 path_value = None
-                if item.path and index < len(item.path):
-                    path_value = item.path[index]
+                if item.location_path and index < len(item.location_path):
+                    path_value = item.location_path[index]
                 row[col_name] = path_value
 
-            row["PLAQUETA"] = item.reference
+            row["ATIVO"] = item.reference
+            row["ATIVO PRINCIPAL"] = item.hierarchy_path[0]
+            row["NIVEL"] = f"Nivel {item.level}"
+
+            for index in range(max_hierarchy_path_length):
+                col_name = f"NIVEL {index+1}"
+                path_value = None
+                if item.hierarchy_path and index < len(item.hierarchy_path):
+                    path_value = item.hierarchy_path[index]
+                row[col_name] = path_value
+
+            row["HIERARQUIA"] = (
+                "Filho" 
+                if item.hierarchy_stand == HierarchyStandChoice.CHILD 
+                else "Pai"
+            )
+
+            row["DESCRIÇÃO"] = item.asset_data.get("description")
+            row["FABRICANTE"] = item.asset_data.get("manufacturer")
+            row["MODELO"] = item.asset_data.get("model")
+            row["N ID TEC"] = item.asset_data.get("n_id_tec")
+            row["TIPO INTERNO"] = item.asset_data.get("type")
+            row["TECNOLOGIA"] = None
+            row["STATUS OPERACIONAL"] = None
+            row["PROJETO"] = None
+            row["HOSTNAME"] = item.asset_data.get("hostname")
+            row["CTG EQUIPAMENTO"] = None
+            row["EQUIPAMENTO CONFIRMADO"] = None
+            row["STATUS EM CAMPO"] = None
+            row["SISTEMA DE GERÊNCIA"] = None
+            row["STATUS DA CONCILIAÇÃO COM A CONTABILIDADE"] = None
+            row["COM INVENTÁRIO EM CAMPO?"] = None
+            row["INVENTARIANTE"] = None
+            row["STATUS DA CONCILIAÇÃO COM A GERÊNCIA"] = None
+            row["LOCALIZAÇÃO"] = None
+            row["MÊS PREV"] = None
+            row["STATUS CAMPO V.TAL"] = None
+            row["LOCALIZAÇÃO_2"] = None
             row["INVENTARIADO"] = "SIM" if item.checked else "NÃO"
             row["INVENTARIADO EM"] = item.checked_at.strftime("%d/%m/%Y %H:%M") if item.checked_at else None
-
-            for key in asset_keys:
-                key_name = key.upper()
-                row[key_name] = item.asset_data.get(key) if item.asset_data else None
-
             rows.append(row)
 
         return rows        
@@ -344,13 +385,15 @@ class AnalyticalReportService:
             for field in fields(AnalyticalReportRawDataDTO)
         }
 
+        parent_object_ids = []
+
         if not parent_ids:
             docs = await self.db.inventory_items.find(
                 {"node_type": "ASSET"},
                 raw_fields
             ).to_list(None)
+            parent_object_ids = [doc["_id"] for doc in docs]
         else:
-            parent_object_ids = []
             for parent_id in parent_ids:
                 if not ObjectId.is_valid(parent_id):
                     raise ValueError(
@@ -358,27 +401,319 @@ class AnalyticalReportService:
                     )
                 parent_object_ids.append(ObjectId(parent_id))
 
-            docs = await self.db.inventory_items.aggregate(
-                [
-                    {"$match": {"_id": {"$in": parent_object_ids}}},
-                    {
-                        "$graphLookup": {
-                            "from": "inventory_items",
-                            "startWith": "$_id",
-                            "connectFromField": "_id",
-                            "connectToField": "parent_id",
-                            "as": "descendants"
+        docs = await self.db.inventory_items.aggregate(
+        [
+            {
+                "$match": {
+                    "_id": { "$in": parent_object_ids }
+                }
+            },
+            {
+                "$graphLookup": {
+                    "from": "inventory_items",
+                    "startWith": "$_id",
+                    "connectFromField": "_id",
+                    "connectToField": "parent_id",
+                    "as": "descendants"
+                }
+            },
+            {
+                "$project": {
+                    "items": {
+                        "$concatArrays": [
+                            ["$$ROOT"],
+                            "$descendants"
+                        ]
+                    }
+                }
+            },
+            { "$unwind": "$items" },
+            { "$replaceRoot": { "newRoot": "$items" } },
+            {
+                "$group": {
+                    "_id": "$_id",
+                    "doc": { "$first": "$$ROOT" }
+                }
+            },
+            {
+                "$replaceRoot": {
+                    "newRoot": "$doc"
+                }
+            },
+            {
+                "$match": {
+                    "node_type": "ASSET"
+                }
+            },
+            {
+                "$graphLookup": {
+                    "from": "inventory_items",
+                    "startWith": "$parent_id",
+                    "connectFromField": "parent_id",
+                    "connectToField": "_id",
+                    "as": "ancestors",
+                    "depthField": "depth"
+                }
+            },
+            {
+                "$addFields": {
+                    "ancestors": {
+                        "$sortArray": {
+                            "input": "$ancestors",
+                            "sortBy": { "depth": -1 }
                         }
+                    }
+                }
+            },
+            {
+                "$addFields": {
+                    "location_path": {
+                        "$cond": [
+                            { "$eq": ["$node_type", "LOCATION"] },
+                            {
+                                "$concatArrays": [
+                                    {
+                                        "$map": {
+                                            "input": {
+                                                "$filter": {
+                                                    "input": "$ancestors",
+                                                    "as": "a",
+                                                    "cond": { "$eq": ["$$a.node_type", "LOCATION"] }
+                                                }
+                                            },
+                                            "as": "loc",
+                                            "in": "$$loc.reference"
+                                        }
+                                    },
+                                    ["$reference"]
+                                ]
+                            },
+                            {
+                                "$map": {
+                                    "input": {
+                                        "$filter": {
+                                            "input": "$ancestors",
+                                            "as": "a",
+                                            "cond": { "$eq": ["$$a.node_type", "LOCATION"] }
+                                        }
+                                    },
+                                    "as": "loc",
+                                    "in": "$$loc.reference"
+                                }
+                            }
+                        ]
                     },
-                    {"$unwind": "$descendants"},
-                    {"$match": {"descendants.node_type": "ASSET"}},
-                    {"$replaceRoot": {"newRoot": "$descendants"}},
-                    {"$project": {**raw_fields}}
-                ]
-            ).to_list(None)
+                    "hierarchy_path": {
+                        "$concatArrays": [
+                            {
+                                "$map": {
+                                    "input": {
+                                        "$filter": {
+                                            "input": "$ancestors",
+                                            "as": "a",
+                                            "cond": { "$eq": ["$$a.node_type", "ASSET"] }
+                                        }
+                                    },
+                                    "as": "asset",
+                                    "in": "$$asset.reference"
+                                }
+                            },
+                            ["$reference"]
+                        ]
+                    }
+                }
+            },
+            {
+                "$addFields": {
+                    "level": {
+                        "$subtract": [
+                            {
+                                "$add": [
+                                    "$level",
+                                    1
+                                ]
+                            },
+                            { "$size": "$location_path" }
+                        ]
+                    }
+                }
+            },
+            {
+                "$addFields": {
+                    "hierarchy_stand": {
+                        "$cond": [
+                            { "$eq": ["$level", 1] },
+                            HierarchyStandChoice.PARENT.value,
+                            HierarchyStandChoice.CHILD.value
+                        ]
+                    }
+                }
+            },
+            {
+                "$project": raw_fields
+            },
+            {
+                "$sort": {
+                    "level": 1
+                }
+            }
+        ]
+        ).to_list(None)
+
+        print("len", len(docs))
 
         dto_list: List[AnalyticalReportRawDataDTO] = [
             AnalyticalReportRawDataDTO(**doc) for doc in docs
         ]
 
         return dto_list
+
+class ImagesExportService:
+    def __init__(self, database: AsyncIOMotorDatabase):
+        self.db = database
+
+    async def export_images(self, parent_id: Optional[str], mode: ImageExportModeChoice):
+        storage_key = None
+        if mode == ImageExportModeChoice.EXPORT_ALL:
+            storage_key = await self.export_all_images()
+        elif mode == ImageExportModeChoice.EXPORT_SINGLE:
+            if not parent_id:
+                raise ValueError(
+                    f"parent_id inválido: valores vazios não são aceitos para a operação EXPORT_SINGLE."
+                )
+            storage_key = await self.export_single_item_images(parent_id)
+        else:
+            if not parent_id:
+                raise ValueError(
+                    f"parent_id inválido: valores vazios não são aceitos para a operação EXPORT_TREE."
+                )
+            storage_key = await self.export_tree_items_images(parent_id)
+        return storage_key
+
+    async def export_all_images(self):
+        pipeline_service = InventoryItemsPipelines(self.db)
+        all_location_docs = await pipeline_service.get_all_locations_with_parent_path(
+            projection_fields={"_id": 1, "parent_locations": 1}
+        )
+
+        locations_map: Dict[str, str] = {
+            str(loc["_id"]): " -> ".join(loc.get("parent_locations", ["POSICAO_SEM_PATH"]))
+            for loc in all_location_docs
+        }
+
+        items_cursor = await pipeline_service.get_all_items_by_locations(
+            locations_ids=[loc["_id"] for loc in all_location_docs],
+            projection_fields={"root_loc": 1, "reference": 1, "photos": 1},
+            batch_size=200,
+            as_list=False
+        )
+
+        storage_key = generate_s3_temporary_storage_object_key(FileTypeChoices.ZIP)
+        uploader = MultipartUploader(
+            key=storage_key
+        )
+
+        zip_writer = ImageStreamingZipWriter(uploader)
+
+        async for item in items_cursor:
+            root_loc = str(item["root_loc"])
+            folder = locations_map.get(root_loc)
+
+            if not folder:
+                continue
+
+            photos_keys = item.get("photos") or []
+            if not photos_keys:
+                continue
+
+            photos_base64 = await DownloadStorageObjecs().download_by_path(photos_keys)
+
+            await zip_writer.process(
+                folder=folder,
+                reference=item.get("reference", "SEM_REFERENCIA"),
+                images_base64=photos_base64
+            )
+
+        await zip_writer.stream_to_cloud()
+        return storage_key
+
+    async def export_single_item_images(self, asset_id: str):
+        if not ObjectId.is_valid(asset_id):
+            raise ValueError(
+                f"ID de asset inválido: {asset_id} não pode ser convertido para ObjectId."
+            )
+
+        storage_key = generate_s3_temporary_storage_object_key(
+            FileTypeChoices.ZIP
+        )
+        uploader = MultipartUploader(
+            key=storage_key
+        )
+        zip_writer = ImageStreamingZipWriter(
+            uploader
+        )
+
+        asset_object_id = ObjectId(asset_id)
+        pipeline_service = InventoryItemsPipelines(self.db)
+        item = await pipeline_service.get_asset_with_images_and_parent_locations(
+            asset_id=asset_object_id,
+            projection_fields={"locations": "$locations.reference", "reference": 1, "photos": 1}
+        )
+
+        if item:
+            location_path = (" -> ").join(item.get("locations", ["CAMINHO_LOCALIZACAO_NAO_ENCONTRADO"]))
+            photos_keys = item.get("photos") or []
+            photos_base64 = await DownloadStorageObjecs().download_by_path(photos_keys)
+
+            await zip_writer.process(
+                folder=location_path,
+                reference=item.get("reference", "SEM_REFERENCIA"),
+                images_base64=photos_base64
+            )
+
+        await zip_writer.stream_to_cloud()
+        return storage_key
+
+    async def export_tree_items_images(self, parent_id: str):
+        if not ObjectId.is_valid(parent_id):
+            raise ValueError(
+                f"ID de asset inválido: {parent_id} não pode ser convertido para ObjectId."
+            )
+
+        storage_key = generate_s3_temporary_storage_object_key(
+            FileTypeChoices.ZIP
+        )
+        uploader = MultipartUploader(
+            key=storage_key
+        )
+        zip_writer = ImageStreamingZipWriter(
+            uploader
+        )
+
+        pipeline_service = InventoryItemsPipelines(self.db)
+        parent_object_id = ObjectId(parent_id)
+
+        items_cursor = await pipeline_service.get_asset_tree_with_images_and_parent_locations(
+            parent_id=parent_object_id,
+            projection_fields={"parent_locations": "$parent_locations.reference", "reference": 1, "photos": 1},
+            batch_size=200,
+            as_list=False
+        )
+
+        async for item in items_cursor:
+            locations_path = item.get("parent_locations")
+            if not locations_path:
+                locations_path = ["CAMINHO_LOCALIZACAO_NAO_ENCONTRADO"]
+
+            folder = " -> ".join(locations_path)
+            photos_keys = item.get("photos", [])
+            photos_base64 = await DownloadStorageObjecs().download_by_path(photos_keys)
+
+            await zip_writer.process(
+                folder=folder,
+                reference=item.get("reference", "SEM_REFERENCIA"),
+                images_base64=photos_base64
+            )
+
+        await zip_writer.stream_to_cloud()
+        return storage_key

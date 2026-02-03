@@ -57,4 +57,3 @@ class AsyncTaskRepository:
             _id=str(async_task_id),
             status=AsyncTaskStatus.PENDING.value
         )
-

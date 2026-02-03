@@ -10,7 +10,8 @@ from app.modules.task.task_choices import AsyncTaskType
 # schemas
 from app.modules.report.report_schemas import (
     CreateInventoryResponsibilityAgreementReportRequest,
-    CreateAnalyticalReportRequest
+    CreateAnalyticalReportRequest,
+    ImagesExportRequest
 )
 
 router = APIRouter(prefix="/report", tags=["Report"])
@@ -104,6 +105,24 @@ async def create_analytical_report(
     async_task = await repository.create(
         task_type=AsyncTaskType.EXPORT_ANALYTICALT_REPORT,
         params={"parent_ids": payload.parent_ids}
+    )
+
+    return async_task
+
+@router.post(
+    "/images", 
+    response_model=AsyncTaskCreateResponse,
+    status_code=status.HTTP_202_ACCEPTED
+)
+async def images_export(
+    request: Request, 
+    payload: ImagesExportRequest    
+) -> AsyncTaskCreateResponse:   
+
+    repository = AsyncTaskRepository(request.state.db)
+    async_task = await repository.create(
+        task_type=AsyncTaskType.EXPORT_ITEMS_IMAGES,
+        params={"parent_id": payload.parent_id, "mode": payload.mode}
     )
 
     return async_task

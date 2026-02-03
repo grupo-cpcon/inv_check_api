@@ -1,7 +1,8 @@
 from app.modules.task.task_choices import AsyncTaskResultType, AsyncTaskType
-from app.modules.task.handlers.export_inventory_respponsability_agreement_report_handler import ExportInventoryResponsibilityAgreementReportHandler
-from app.modules.task.handlers.export_analytical_report_handler import ExportAnalyticalReportHandler
-
+from app.modules.task.handlers.export.export_inventory_respponsability_agreement_report_handler import ExportInventoryResponsibilityAgreementReportHandler
+from app.modules.task.handlers.export.export_analytical_report_handler import ExportAnalyticalReportHandler
+from app.modules.task.handlers.export.export_images_handler import ExportImagesHandler
+from app.modules.task.handlers.upload.upload_items_images_handler import UploadItemsImagesHandler
 from app.modules.task.task_schemas import AsyncTaskSpec
 
 
@@ -14,6 +15,14 @@ class AsyncTaskFactory:
         AsyncTaskType.EXPORT_ANALYTICALT_REPORT: AsyncTaskSpec(
             handler=ExportAnalyticalReportHandler,
             result_type=AsyncTaskResultType.ARCHIVE
+        ),
+        AsyncTaskType.EXPORT_ITEMS_IMAGES: AsyncTaskSpec(
+            handler=ExportImagesHandler,
+            result_type=AsyncTaskResultType.TEMPORARY_URL_ACCESS
+        ),
+        AsyncTaskType.UPLOAD_ITEMS_IMAGES: AsyncTaskSpec(
+            handler=UploadItemsImagesHandler,
+            result_type=AsyncTaskResultType.RAW_RESULT
         )
     }
 

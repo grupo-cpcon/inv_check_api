@@ -11,6 +11,8 @@ from app.shared.database.object_management import update_attributes
 from app.shared.storage.s3.objects import (
     generate_s3_storage_object_key,
     storage_s3_save_object,
+    storage_s3_move_object,
+    generate_s3_storage_move_object_key
 )
 
 
@@ -55,10 +57,27 @@ class BaseAsyncTaskHandler(ABC):
         )
 
     async def _handle_result(self, result: Any) -> str:
-        if self.result_type != AsyncTaskResultType.ARCHIVE:
+        if self.result_type == AsyncTaskResultType.RAW_RESULT:
             return result
 
         base_path = TaskStoragePaths(self.db.name).async_task(self.task_id)
+
+        if self.result_type == AsyncTaskResultType.TEMPORARY_URL_ACCESS:
+            source_path = result
+            destination_path = generate_s3_storage_move_object_key(
+                full_source_path=source_path,
+                relative_destination_path=base_path
+            )
+
+            await self.update_attributes(
+                result_type=AsyncTaskResultType.ARCHIVE.value
+            )
+
+            return storage_s3_move_object(
+                source_key=source_path,
+                destination_key=destination_path
+            )
+
         key = generate_s3_storage_object_key(prefix=base_path, file=result)
 
         await anyio.to_thread.run_sync(

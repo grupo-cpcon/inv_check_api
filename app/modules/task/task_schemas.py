@@ -1,12 +1,16 @@
 from pydantic import BaseModel, Field
 from typing import Any, Optional
-from app.modules.task.task_choices import AsyncTaskStatus, AsyncTaskResultType
+from app.modules.task.task_choices import AsyncTaskStatus, AsyncTaskResultType, AsyncTaskType
 from datetime import datetime
 from app.shared.datetime import time_now
 from dataclasses import dataclass
+from fastapi import UploadFile
+
 
 class AsyncTaskCreateRequest(BaseModel):
     status: AsyncTaskStatus = AsyncTaskStatus.PENDING.value
+    task_type: AsyncTaskType
+    input_file: Optional[UploadFile] = None
     result_type: AsyncTaskResultType
     progress: int = 0
     result: Optional[Any] = None
