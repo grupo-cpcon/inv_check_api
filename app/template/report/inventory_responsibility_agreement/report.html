@@ -196,6 +196,7 @@
     .item-description,
     .item-model,
     .item-serial,
+    .item-is-app-created,
     .item-parent {
       font-size: 10pt;
       color: #475569;
@@ -268,6 +269,9 @@
                       {% endif %}
 
                       <div class="item-description">{{ item.description or "-" }}</div>
+                      <div class="item-is-app-created">
+                        Criado pelo app? {{ "SIM" if item.is_app_created else "NÃO" }}
+                      </div>
                       <div class="item-model">Modelo: {{ item.model or "-" }}</div>
                       <div class="item-serial">Serial: {{ item.serial or "-" }}</div>
                     </div>

@@ -136,7 +136,8 @@ class AssetInventoryResponsibilityReportService:
             photo_key = item_doc.get("photos")[0] if item_doc.get("photos", None) else None
             location.items.append(
                 InventoryResposabilityAgreementItemDTO(
-                    reference=item_doc.get("reference", None),
+                    reference=item_doc.get("reference"),
+                    is_app_created=item_doc.get("is_app_created", False),
                     checked=item_doc.get("checked", False),
                     description=item_doc.get("asset_data", {}).get("description"),
                     serial=item_doc.get("asset_data", {}).get("serial"),
@@ -368,6 +369,7 @@ class AnalyticalReportService:
             row["MÊS PREV"] = None
             row["STATUS CAMPO V.TAL"] = None
             row["LOCALIZAÇÃO_2"] = None
+            row["CRIADO PELO APP?"] = "SIM" if item.is_app_created else "NÃO"
             row["INVENTARIADO"] = "SIM" if item.checked else "NÃO"
             row["INVENTARIADO EM"] = item.checked_at.strftime("%d/%m/%Y %H:%M") if item.checked_at else None
             rows.append(row)
@@ -560,8 +562,6 @@ class AnalyticalReportService:
         ]
         ).to_list(None)
 
-        print("len", len(docs))
-
         dto_list: List[AnalyticalReportRawDataDTO] = [
             AnalyticalReportRawDataDTO(**doc) for doc in docs
         ]
@@ -616,6 +616,7 @@ class ImagesExportService:
         zip_writer = ImageStreamingZipWriter(uploader)
 
         async for item in items_cursor:
+            print(item)
             root_loc = str(item["root_loc"])
             folder = locations_map.get(root_loc)
 
@@ -625,8 +626,10 @@ class ImagesExportService:
             photos_keys = item.get("photos") or []
             if not photos_keys:
                 continue
+            print(photos_keys)
 
             photos_base64 = await DownloadStorageObjecs().download_by_path(photos_keys)
+            print(photos_base64)
 
             await zip_writer.process(
                 folder=folder,

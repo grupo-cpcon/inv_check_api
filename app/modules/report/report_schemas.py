@@ -21,6 +21,7 @@ class ImagesExportRequest(BaseModel):
 @dataclass
 class InventoryResposabilityAgreementItemDTO:
     reference: str
+    is_app_created: bool
     color: str
     checked: Optional[bool] = False
     description: Optional[str] = None
@@ -43,6 +44,7 @@ class AnalyticalReportRawDataDTO:
     _id: ObjectId
     level: int
     hierarchy_stand: HierarchyStandChoice
+    is_app_created: Optional[bool] = False
     reference: Optional[str] = None
     checked: Optional[bool] = False
     checked_at: Optional[datetime.datetime] = None
