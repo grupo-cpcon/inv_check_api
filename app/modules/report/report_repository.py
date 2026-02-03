@@ -592,14 +592,18 @@ class ImagesExportService:
 
     async def export_all_images(self):
         pipeline_service = InventoryItemsPipelines(self.db)
-        all_location_docs = await pipeline_service.get_all_locations_with_parent_path(
+        all_location_docs = await pipeline_service.get_all_location_with_parents_locations(
             projection_fields={"_id": 1, "parent_locations": 1}
         )
+
+        print(all_location_docs)
 
         locations_map: Dict[str, str] = {
             str(loc["_id"]): " -> ".join(loc.get("parent_locations", ["POSICAO_SEM_PATH"]))
             for loc in all_location_docs
         }
+
+        print(locations_map)
 
         items_cursor = await pipeline_service.get_all_items_by_locations(
             locations_ids=[loc["_id"] for loc in all_location_docs],
@@ -616,7 +620,6 @@ class ImagesExportService:
         zip_writer = ImageStreamingZipWriter(uploader)
 
         async for item in items_cursor:
-            print(item)
             root_loc = str(item["root_loc"])
             folder = locations_map.get(root_loc)
 
@@ -626,10 +629,8 @@ class ImagesExportService:
             photos_keys = item.get("photos") or []
             if not photos_keys:
                 continue
-            print(photos_keys)
 
             photos_base64 = await DownloadStorageObjecs().download_by_path(photos_keys)
-            print(photos_base64)
 
             await zip_writer.process(
                 folder=folder,

@@ -278,7 +278,7 @@ class InventoryItemsPipelines:
 
         return cursor
 
-    async def get_location_with_parents(
+    async def get_all_location_with_parents_locations(
         self,
         projection_fields: Dict[str, Any],
         batch_size: Optional[int] = None,
@@ -288,7 +288,7 @@ class InventoryItemsPipelines:
             [
                 {
                     "$match": {
-                        "type": "LOCATION"
+                        "node_type": "LOCATION"
                     }
                 },
                 {
@@ -304,11 +304,27 @@ class InventoryItemsPipelines:
                 {
                     "$addFields": {
                         "parent_locations": {
-                            "$filter": {
-                                "input": "$ancestor_nodes",
-                                "as": "node",
-                                "cond": {"$eq": ["$$node.type", "LOCATION"]}
+                        "$concatArrays": [
+                            {
+                            "$map": {
+                                "input": {
+                                "$sortArray": {
+                                    "input": {
+                                    "$filter": {
+                                        "input": "$ancestor_nodes",
+                                        "as": "node",
+                                        "cond": { "$eq": ["$$node.node_type", "LOCATION"] }
+                                    }
+                                    },
+                                    "sortBy": { "level": -1 }
+                                }
+                                },
+                                "as": "loc",
+                                "in": "$$loc.reference"
                             }
+                            },
+                            ["$reference"]
+                        ]
                         }
                     }
                 },
