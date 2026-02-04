@@ -1,26 +1,89 @@
-services:
-  api:
-    build: .
-    container_name: fastapi_api
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
-    volumes:
-      - .:/app
-    ports:
-      - "8000:8000"
-    depends_on:
-      - redis
+version: '3.8'
 
-  celery_worker:
-    build: .
-    container_name: celery_worker
-    command: celery -A app.core.celery.celery_app worker -l info
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: inv_check_mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: Admin123456
     volumes:
-      - .:/app
-    depends_on:
-      - redis
+      - mongodb_data:/data/db
+    ports:
+      - "27017:27017"
+    networks:
+      - inv_check_network
+    healthcheck:
+      test: mongosh --eval 'db.adminCommand("ping")' --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
-    image: redis:7
-    container_name: redis
+    image: redis:7-alpine
+    container_name: inv_check_redis
+    restart: unless-stopped
     ports:
-      - "9000:9000"
+      - "6379:6379"
+    networks:
+      - inv_check_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: inv_check_api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    environment:
+      - MONGO_URI=mongodb://admin:Admin123456@mongodb:27017/?authSource=admin
+      - LEGACY_AUTH_PROVIDE_URL=https://manager.cpcon.co/api/jwt/obtain-token/
+      - LEGACY_AUTH_VALIDATE_URL=https://manager.cpcon.co/api/jwt/verify-token/
+      - AWS_ACCESS_KEY_ID=DO00PZCXRVT3HJE9NXRD
+      - AWS_SECRET_ACCESS_KEY=zaul8Ue72U0Y2Ysi9PqnKy6I6fiqLJ2eSkdMeH93axQ
+      - AWS_DEFAULT_REGION=us-east-1
+      - AWS_ENDPOINT_URL=https://nyc3.digitaloceanspaces.com
+      - AWS_S3_BUCKET=development-api-cpcon
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - inv_check_network
+
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: inv_check_celery_worker
+    command: celery -A app.core.celery worker -l info
+    volumes:
+      - .:/app
+    environment:
+      - MONGO_URI=mongodb://admin:Admin123456@mongodb:27017/?authSource=admin
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    networks:
+      - inv_check_network
+
+volumes:
+  mongodb_data:
+    driver: local
+
+networks:
+  inv_check_network:
+    driver: bridge
