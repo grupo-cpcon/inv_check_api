@@ -5,15 +5,13 @@ from app.modules.task.task_choices import AsyncTaskResultType
 from app.modules.task.task_schemas import AsyncTaskCreateResponse
 from app.modules.task.task_repository import AsyncTaskRepository
 from fastapi import BackgroundTasks, status
+from app.modules.task.task_choices import AsyncTaskType
 
 # schemas
 from app.modules.report.report_schemas import (
-    CreateAnalyticalReportRequest
-)
-
-# services
-from app.modules.report.report_repository import (
-    ReportAnaliticalService
+    CreateInventoryResponsibilityAgreementReportRequest,
+    CreateAnalyticalReportRequest,
+    ImagesExportRequest
 )
 
 router = APIRouter(prefix="/report", tags=["Report"])
@@ -76,24 +74,55 @@ async def dashboard_session(request: Request):
     }
 
 @router.post(
+    "/inventory-responsibility-agreement", 
+    response_model=AsyncTaskCreateResponse,
+    status_code=status.HTTP_202_ACCEPTED
+)
+async def create_inventory_responsibility_agreement_report(
+    request: Request, 
+    payload: CreateInventoryResponsibilityAgreementReportRequest    
+) -> AsyncTaskCreateResponse:   
+
+    repository = AsyncTaskRepository(request.state.db)
+    async_task = await repository.create(
+        task_type=AsyncTaskType.EXPORT_INVENTORY_RESPONSIBILITY_AGREEMENT_REPORT,
+        params={"parent_location_ids": payload.parent_location_ids}
+    )
+
+    return async_task
+
+@router.post(
     "/analytical", 
     response_model=AsyncTaskCreateResponse,
     status_code=status.HTTP_202_ACCEPTED
 )
 async def create_analytical_report(
     request: Request, 
-    background_tasks: BackgroundTasks,
     payload: CreateAnalyticalReportRequest    
 ) -> AsyncTaskCreateResponse:   
 
-    parent_ids = payload.parent_ids
-    task_repository = AsyncTaskRepository(request.state.db)
+    repository = AsyncTaskRepository(request.state.db)
+    async_task = await repository.create(
+        task_type=AsyncTaskType.EXPORT_ANALYTICALT_REPORT,
+        params={"parent_ids": payload.parent_ids}
+    )
 
-    async_task = await task_repository.create(
-        background_async_tasks=background_tasks,
-        func=ReportAnaliticalService(request.state.db).create_analitical_report,
-        params={"parent_ids": parent_ids},
-        result_type=AsyncTaskResultType.ARCHIVE
+    return async_task
+
+@router.post(
+    "/images", 
+    response_model=AsyncTaskCreateResponse,
+    status_code=status.HTTP_202_ACCEPTED
+)
+async def images_export(
+    request: Request, 
+    payload: ImagesExportRequest    
+) -> AsyncTaskCreateResponse:   
+
+    repository = AsyncTaskRepository(request.state.db)
+    async_task = await repository.create(
+        task_type=AsyncTaskType.EXPORT_ITEMS_IMAGES,
+        params={"parent_id": payload.parent_id, "mode": payload.mode}
     )
 
     return async_task
