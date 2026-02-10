@@ -596,14 +596,10 @@ class ImagesExportService:
             projection_fields={"_id": 1, "parent_locations": 1}
         )
 
-        print(all_location_docs)
-
         locations_map: Dict[str, str] = {
             str(loc["_id"]): " -> ".join(loc.get("parent_locations", ["POSICAO_SEM_PATH"]))
             for loc in all_location_docs
         }
-
-        print(locations_map)
 
         items_cursor = await pipeline_service.get_all_items_by_locations(
             locations_ids=[loc["_id"] for loc in all_location_docs],

@@ -103,7 +103,7 @@ async def create_analytical_report(
 
     repository = AsyncTaskRepository(request.state.db)
     async_task = await repository.create(
-        task_type=AsyncTaskType.EXPORT_ANALYTICALT_REPORT,
+        task_type=AsyncTaskType.EXPORT_ANALYTICAL_REPORT,
         params={"parent_ids": payload.parent_ids}
     )
 

@@ -12,7 +12,7 @@ class AsyncTaskFactory:
             handler=ExportInventoryResponsibilityAgreementReportHandler,
             result_type=AsyncTaskResultType.ARCHIVE
         ),
-        AsyncTaskType.EXPORT_ANALYTICALT_REPORT: AsyncTaskSpec(
+        AsyncTaskType.EXPORT_ANALYTICAL_REPORT: AsyncTaskSpec(
             handler=ExportAnalyticalReportHandler,
             result_type=AsyncTaskResultType.ARCHIVE
         ),
